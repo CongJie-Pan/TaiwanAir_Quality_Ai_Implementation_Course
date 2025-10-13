@@ -9,7 +9,9 @@ This repository contains ~5.9 million records of Taiwan air quality monitoring d
 ## Data Formats
 
 ### Original Format
-- **CSV File**: `air_quality.csv` (801 MB)
+- **CSV File**: 
+  [from Kaggle](https://www.kaggle.com/datasets/taweilo/taiwan-air-quality-data-20162024)
+  - `air_quality.csv` (801 MB)
 - 5,882,209 records
 - 25 columns including timestamps, pollutant measurements, and geolocation
 
@@ -332,32 +334,3 @@ This measures:
 - Load time performance
 - Query performance
 - Format comparisons
-
-## Contributing
-
-This is a data analysis repository. To add new features:
-
-1. Follow the coding guidelines in `CLAUDE.md`
-2. Use the established project structure
-3. Add tests for new functionality
-4. Update this README
-
-## License
-
-[Specify your license here]
-
-## Acknowledgments
-
-Data source: Taiwan Environmental Protection Administration (EPA)
-Air quality monitoring network
-
-## Contact
-
-[Your contact information]
-
----
-
-**Last Updated**: 2025-10-13
-**Dataset Version**: 2016-2024 (5.9M records)
-**Format Version**: 1.0
-# TaiwanAir_Quality_Ai_Implementation_Course
