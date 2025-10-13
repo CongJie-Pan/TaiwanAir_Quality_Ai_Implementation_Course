@@ -1,0 +1,25 @@
+# Air Quality Data Processing Requirements
+# Python packages needed for processing Taiwan air quality data
+
+# Core data processing
+pandas>=2.0.0
+pyarrow>=12.0.0
+numpy>=1.24.0
+
+# Database support
+duckdb>=0.9.0
+
+# Data visualization and analysis
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# Jupyter notebook support
+jupyter>=1.0.0
+ipykernel>=6.25.0
+
+# Progress bars and utilities
+tqdm>=4.65.0
+
+# Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
