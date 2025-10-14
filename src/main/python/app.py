@@ -36,7 +36,7 @@ if str(current_dir) not in sys.path:
 from utils.app_utils import init_session_state, add_log, prepare_data, filter_data
 from utils.data_loader import AirQualityDataLoader
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 
 
 # ==================== Page Configuration ====================
@@ -75,13 +75,23 @@ st.markdown(
 
 # ==================== Navigation Bar ====================
 
+# Feature toggle to temporarily hide advanced pages (Wisdom/Prediction)
+# Reason: Per request, pages 4 and 5 should not be shown for now.
+HIDE_ADVANCED_PAGES = True
+
+# Build the pages list conditionally. Keeping labels consistent with DIKW.
 pages = [
     "[數據總覽]",      # Data Layer
     "[統計分析]",      # Information Layer
-    "[規律發現]",      # Knowledge Layer
-    "[智慧決策]",      # Wisdom Layer
-    "[預測模型]"       # Wisdom Layer Advanced
+    "[規律發現]"       # Knowledge Layer
 ]
+
+# Only expose advanced pages if explicitly enabled
+if not HIDE_ADVANCED_PAGES:
+    pages += [
+        "[智慧決策]",      # Wisdom Layer
+        "[預測模型]"       # Wisdom Layer Advanced
+    ]
 
 use_top_nav = os.getenv("USE_TOP_NAV", "0").lower() in ("1", "true", "yes", "y")
 if use_top_nav:
@@ -195,8 +205,18 @@ if DEBUG_UI:
 st.sidebar.header("🔍 【數據篩選】")
 
 # Date range selection
-default_end_date = max_date.date()
-default_start_date = (max_date - timedelta(days=30)).date()
+# Prefer full year 2023 by default, clamped to available data range.
+desired_start = date(2023, 1, 1)
+desired_end = date(2023, 12, 31)
+
+# Clamp desired defaults to [min_date, max_date]
+default_start_date = max(min_date.date(), desired_start)
+default_end_date = min(max_date.date(), desired_end)
+
+# Fallback: if dataset does not cover 2023 at all, use full available range
+if default_start_date > default_end_date:
+    default_start_date = min_date.date()
+    default_end_date = max_date.date()
 
 date_range = st.sidebar.date_input(
     "選擇時間範圍",
@@ -563,8 +583,7 @@ if sss.df is None:
     - **數據總覽**：查看原始數據與基本指標
     - **統計分析**：比較分布、統計量與趨勢
     - **規律發現**：探索相關性、熱力圖、風玫瑰圖等
-    - **智慧決策**：取得健康建議與策略參考
-    - **預測模型**：展示預測結果（頁面架構已備妥）
+    - （暫時隱藏）智慧決策、預測模型
     """)
     st.stop()
 

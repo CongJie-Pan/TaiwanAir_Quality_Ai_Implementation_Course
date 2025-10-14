@@ -113,3 +113,5 @@
 - [2025-10-14] Fix data load error: duplicate labels in time period binning caused pandas error "labels must be unique if ordered=True". Resolved by using unique labels in `utils/app_utils.py` (`凌晨`, `早晨`, `上午`, `下午`, `傍晚`, `夜間`). [Completed]
 - [2025-10-14] Remove sidebar user input feature (username/suggestion) per requirement. Cleaned session state and removed UI block in `app.py`. [Completed]
 - [2025-10-14] Expand usage instructions detailing how to operate the control panel in `app.py` (empty-state help) and `README.md` (Streamlit App section). [Completed]
+- [2025-10-14] Temporarily hide pages 4 and 5 (智慧決策、預測模型): removed from navigation via `HIDE_ADVANCED_PAGES=True` in `src/main/python/app.py` and stopped exporting them in `src/main/python/pages/__init__.py`. Restore by setting flag to False and re-exporting. [Completed]
+- [2025-10-14] Set default sidebar date range to 2023/01/01–2023/12/31, clamped to available data; fallback to full available range when 2023 is out of bounds. Implemented in `src/main/python/app.py`. [Completed]

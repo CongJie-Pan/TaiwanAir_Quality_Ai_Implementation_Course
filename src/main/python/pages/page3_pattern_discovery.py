@@ -72,17 +72,10 @@ def render(df: pd.DataFrame):
         diff_pct = ((winter_aqi - summer_aqi) / summer_aqi * 100) if summer_aqi > 0 else 0
 
         st.info(f"""
-        ### 🔍 發現 1: 季節性規律
+        ### 🔍 觀察
 
-        **觀察**: 冬季PM2.5濃度顯著高於夏季 (差異: {diff_pct:.1f}%)
+        冬季PM2.5濃度與夏季差異: {diff_pct:.1f}%
 
-        **原因分析**:
-        - ❄️ 冬季大氣穩定，逆溫層形成頻繁
-        - 🌬️ 污染物不易擴散
-        - 🌏 境外污染物傳輸影響
-        - 🏭 冬季供暖和工業活動增加
-
-        **規律**: 每年11月至次年2月為污染高峰期
         """)
 
         # PM2.5 seasonal pattern
@@ -133,15 +126,10 @@ def render(df: pd.DataFrame):
                 diff_pct = ((west_aqi - east_aqi) / east_aqi * 100) if east_aqi > 0 else 0
 
                 st.info(f"""
-                ### 🔍 發現 2: 地理分布規律
+                ### 🔍 觀察
 
-                **觀察**: 西部地區PM2.5濃度比東部高 {diff_pct:.1f}%
+                西部地區PM2.5濃度與東部差異: {diff_pct:.1f}%
 
-                **原因分析**:
-                - 🏙️ 西部人口密集，工業發達
-                - 🚗 交通排放量大
-                - 🏔️ 地形因素：中央山脈阻擋，污染物不易擴散
-                - 🌊 東部靠海，海風有助於污染物擴散
                 """)
 
     with tab2:
@@ -225,16 +213,14 @@ def render(df: pd.DataFrame):
                 reduction_pct = ((low_wind_aqi - high_wind_aqi) / low_wind_aqi * 100) if low_wind_aqi > 0 else 0
 
                 st.success(f"""
-                ### 🔍 發現 3: 風速與污染關聯
+                ### 🔍 觀察
 
-                **觀察**: 風速與AQI呈負相關 (r={correlation:.2f})
+                風速與AQI相關性 (r={correlation:.2f})
 
-                **發現**:
                 - 💨 風速低於2m/s時，平均AQI: {low_wind_aqi:.1f}
                 - 🌬️ 風速高於5m/s時，平均AQI: {high_wind_aqi:.1f}
                 - 📉 強風可使AQI降低約 {reduction_pct:.1f}%
 
-                **原因**: 風速越大，污染物擴散越快，濃度降低
                 """)
 
     with tab2:
@@ -329,16 +315,10 @@ def render(df: pd.DataFrame):
             st.dataframe(pd.DataFrame(strong_corrs), width='stretch')
 
             st.info("""
-            ### 🔍 發現 4: 污染物關聯性
+            ### 🔍 觀察
 
-            **觀察**: PM2.5與PM10高度正相關
+            PM2.5與PM10高度正相關
 
-            **原因**:
-            - 🏭 來源相同：主要來自工業排放、交通排放、揚塵
-            - 📏 大小關聯：PM2.5是PM10的子集
-            - ⚗️ 化學反應：大氣中的化學反應同時影響兩者
-
-            **應用**: 控制PM10可同時改善PM2.5
             """)
 
     # ===== Temporal Patterns =====
@@ -369,16 +349,11 @@ def render(df: pd.DataFrame):
             low_hour = hourly_pattern.loc[hourly_pattern['aqi'].idxmin(), 'hour']
 
             st.info(f"""
-            ### 🔍 發現 5: 日間變化規律
+            ### 🔍 觀察 : 日間變化規律
 
-            **觀察**:
             - ⬆️ 高峰時段: {peak_hour}時
             - ⬇️ 低谷時段: {low_hour}時
 
-            **原因**:
-            - 🚗 早晚交通尖峰時段排放增加
-            - ☀️ 中午太陽輻射強，大氣混合層高度增加，有助擴散
-            - 🌙 夜間大氣穩定，污染物累積
             """)
 
     with tab2:
@@ -404,19 +379,3 @@ def render(df: pd.DataFrame):
                 )
                 fig.update_xaxes(ticktext=['平日', '週末'], tickvals=[False, True])
                 st.plotly_chart(fig, width='stretch')
-
-    # ===== Summary =====
-    st.markdown("---")
-    st.success("""
-    ### 📚 知識總結
-
-    通過規律發現，我們理解了：
-
-    1. **季節規律**: 冬季污染嚴重，夏季相對良好
-    2. **地理規律**: 西部工業區污染高於東部自然區
-    3. **氣象影響**: 風速是影響空氣質量的關鍵因素
-    4. **污染物關聯**: 多種污染物之間存在強相關性
-    5. **時間模式**: 一日和一週內存在明顯的週期性變化
-
-    💡 **下一步**: 前往「智慧決策」頁面，基於這些知識獲取行動建議
-    """)

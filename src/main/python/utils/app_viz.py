@@ -180,8 +180,9 @@ def create_crosstab_heatmap(
         x=pivot_data.columns,
         y=pivot_data.index,
         colorscale='RdYlGn_r',
-        text=pivot_data.values.round(1),
-        texttemplate='%{text}',
+        text=pivot_data.values.round(2),
+        # Always display heatmap cell labels with two decimals
+        texttemplate='%{z:.2f}',
         textfont={"size": 10},
         colorbar=dict(title=value_col.upper())
     ))
@@ -285,7 +286,7 @@ def create_distribution_plot(
         )
         fig.update_layout(
             xaxis_title=column.upper(),
-            yaxis_title="頻次",
+            yaxis_title="計數",
             template='plotly_white',
             height=400
         )
@@ -402,7 +403,8 @@ def create_correlation_matrix(
         colorscale='RdBu',
         zmid=0,
         text=corr_matrix.values.round(2),
-        texttemplate='%{text}',
+        # Always show two decimals for correlation coefficients
+        texttemplate='%{z:.2f}',
         textfont={"size": 10},
         colorbar=dict(title="相關係數")
     ))

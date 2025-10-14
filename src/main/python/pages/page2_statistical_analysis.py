@@ -15,6 +15,7 @@ Date: 2025-10-14
 import streamlit as st
 import pandas as pd
 import numpy as np
+import plotly.express as px
 import sys
 from pathlib import Path
 
@@ -354,13 +355,50 @@ def render(df: pd.DataFrame):
 
             st.dataframe(year_structure, width='stretch')
 
-            fig = create_bar_chart(
-                year_structure,
-                'year',
-                '平均AQI',
-                title='各年度平均AQI趨勢'
-            )
-            st.plotly_chart(fig, width='stretch')
+            # Use a line chart for clearer year-over-year trend.
+            # If only one year is present (common when filtering a short date range),
+            # fall back to showing that year's monthly trend instead of a single bar.
+            n_years = year_structure['year'].nunique()
+            if n_years >= 2:
+                fig = px.line(
+                    year_structure,
+                    x='year',
+                    y='平均AQI',
+                    markers=True,
+                    title='各年度平均AQI趨勢'
+                )
+                fig.update_traces(line=dict(color='#1f77b4', width=3))
+                fig.update_layout(
+                    template='plotly_white',
+                    height=400,
+                    hovermode='x unified',
+                    xaxis=dict(dtick=1, title='年度'),
+                    yaxis=dict(title='平均AQI')
+                )
+                st.plotly_chart(fig, width='stretch')
+            else:
+                st.info('目前篩選僅含單一年度，改顯示該年度的月趨勢')
+                monthly = df.groupby('month')['aqi'].mean().reset_index()
+                fig = px.line(
+                    monthly,
+                    x='month',
+                    y='aqi',
+                    markers=True,
+                    title='當年度各月份平均AQI'
+                )
+                fig.update_traces(line=dict(color='#1f77b4', width=3))
+                fig.update_layout(
+                    template='plotly_white',
+                    height=400,
+                    hovermode='x unified',
+                    xaxis=dict(
+                        title='月份',
+                        tickmode='array',
+                        tickvals=list(range(1, 13))
+                    ),
+                    yaxis=dict(title='平均AQI')
+                )
+                st.plotly_chart(fig, width='stretch')
 
     # ===== Summary =====
     st.markdown("---")
@@ -378,8 +416,4 @@ def render(df: pd.DataFrame):
     - **空氣最佳**: {best_county} (平均AQI: {best_aqi:.1f})
     - **需要改善**: {worst_county} (平均AQI: {worst_aqi:.1f})
     - **主要污染物**: {main_pollutant}
-
-    💡 **下一步建議**:
-    - 前往「規律發現」頁面深入分析這些統計結果背後的規律
-    - 在「智慧決策」頁面獲取改善建議
     """)
