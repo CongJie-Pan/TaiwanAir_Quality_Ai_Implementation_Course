@@ -6,3 +6,10 @@ __pycache__/
 data/
 GEMINI.md
 .ipynb_checkpoints/
+AGENTS.md
+.testvenv/
+venv/
+env/
+.pytest_cache/
+.streamlit/secrets.toml
+*.pyc

@@ -1,0 +1,15 @@
+[server]
+# Use port 9000 to avoid Hyper-V reserved ports (8470-8569)
+port = 9000
+
+# Automatically open browser
+headless = false
+
+# Enable CORS for development
+enableCORS = false
+enableXsrfProtection = false
+
+[browser]
+# Automatically open browser when starting
+gatherUsageStats = false
+serverAddress = "localhost"

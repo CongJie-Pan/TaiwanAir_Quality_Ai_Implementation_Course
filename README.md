@@ -44,6 +44,14 @@ This repository contains ~5.9 million records of Taiwan air quality monitoring d
 pip install -r requirements.txt
 ```
 
+Note:
+- Use Streamlit >= 1.39.0 to avoid deprecated keyword warnings for Plotly and to support `width='stretch'`.
+- If you already have Streamlit installed, upgrade with:
+
+```bash
+pip install -U streamlit
+```
+
 Required packages:
 - pandas >= 2.0.0
 - pyarrow >= 12.0.0
@@ -128,6 +136,70 @@ result = query_air_quality("""
     LIMIT 10
 """)
 ```
+
+## Streamlit App
+
+### Run the App
+
+```bash
+streamlit run src/main/python/app.py
+```
+
+- Default port is configured to `9000` in `.streamlit/config.toml`.
+- Ensure optimized data exists under `data/processed/` (Parquet or DuckDB).
+
+### Control Panel Guide（側邊欄控制盤）
+
+- 【數據載入】
+  - 顯示可用日期範圍；若資料不存在會提示檢查路徑
+- 【數據篩選】
+  - 時間範圍：選擇開始與結束日期（必選）
+  - 縣市：可多選；留空表示全部
+  - 監測站：會依選擇的縣市篩出站點；留空表示全部
+  - 主要污染物：僅篩選主污染物欄位
+- 【分析參數】
+  - 統計方法：平均值/中位數/最大值/最小值
+  - 時間聚合層級：小時/日/週/月/季/年
+  - AQI 警示閾值：用於趨勢線與提醒
+- 「🔄 載入/更新數據」
+  - 依上述條件載入資料並套用
+- 【當前狀態】
+  - 顯示已載入的筆數、站數、資料時間範圍與平均 AQI
+- 【操作LOG日誌】
+  - 顯示最近操作與提示
+
+提示：
+- 縣市/站點留空 = 不限制（全選）
+- 重新調整條件後，需再次按下「載入/更新數據」才會生效
+- 本版本已移除側邊欄的「用戶輸入/提交建議」功能（不再需要）
+
+### Troubleshooting: Scroll Lock / 無法滾動
+
+若右側主視窗無法捲動，可能是第三方導航列樣式影響。可使用以下快速解法：
+
+1) 預設已採用側邊欄導航（不載入頂部導航列），通常可避免此問題。
+
+2) 若仍想使用頂部導航列，可手動啟用：
+
+```bash
+USE_TOP_NAV=1 streamlit run src/main/python/app.py
+```
+
+Windows PowerShell:
+
+```powershell
+$env:USE_TOP_NAV=1; streamlit run src/main/python/app.py
+```
+
+若啟用後再次遇到捲動問題，請改回預設不啟用頂部導航。強化 CSS 已內建，重新載入亦可嘗試。
+
+### Navigation（DIKW 模型）
+
+- 數據總覽：原始數據與基本指標
+- 統計分析：分布、統計量、趨勢
+- 規律發現：相關性、熱力圖、風玫瑰圖
+- 智慧決策：健康建議與策略參考
+- 預測模型：預測結果展示（頁面架構已備妥）
 
 ## Data Schema
 

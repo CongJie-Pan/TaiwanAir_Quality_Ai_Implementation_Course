@@ -105,3 +105,11 @@
 - **Constraints**: The deployed application should be stable and responsive.
 - **Completion Status**: Not Started
 - **Notes**: Final step to make the project live.
+
+---
+
+## Discovered During Work
+
+- [2025-10-14] Fix data load error: duplicate labels in time period binning caused pandas error "labels must be unique if ordered=True". Resolved by using unique labels in `utils/app_utils.py` (`凌晨`, `早晨`, `上午`, `下午`, `傍晚`, `夜間`). [Completed]
+- [2025-10-14] Remove sidebar user input feature (username/suggestion) per requirement. Cleaned session state and removed UI block in `app.py`. [Completed]
+- [2025-10-14] Expand usage instructions detailing how to operate the control panel in `app.py` (empty-state help) and `README.md` (Streamlit App section). [Completed]

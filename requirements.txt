@@ -23,3 +23,10 @@ tqdm>=4.65.0
 # Testing
 pytest>=7.4.0
 pytest-cov>=4.1.0
+
+# Streamlit web application (use a recent version for width='stretch' support)
+streamlit>=1.39.0
+streamlit-navigation-bar>=3.0.0
+
+# Interactive visualizations
+plotly>=5.17.0
