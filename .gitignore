@@ -4,4 +4,5 @@ CLAUDE.md
 .env
 __pycache__/
 data/
-
+GEMINI.md
+.ipynb_checkpoints/
