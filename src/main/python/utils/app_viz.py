@@ -737,42 +737,7 @@ def create_scatter_plot(
         )
     )
 
-    # Add correlation annotation if available
-    if corr is not None:
-        # Determine correlation strength
-        if abs(corr) >= 0.7:
-            strength = "強"
-        elif abs(corr) >= 0.4:
-            strength = "中度"
-        elif abs(corr) >= 0.2:
-            strength = "弱"
-        else:
-            strength = "極弱"
-
-        direction = "正" if corr > 0 else "負"
-
-        annotation_text = f"相關係數 r = {corr:.3f}<br>{strength}{direction}相關"
-        if pvalue is not None:
-            if pvalue < 0.001:
-                annotation_text += "<br>(p < 0.001, 極顯著)"
-            elif pvalue < 0.01:
-                annotation_text += f"<br>(p = {pvalue:.3f}, 顯著)"
-            elif pvalue < 0.05:
-                annotation_text += f"<br>(p = {pvalue:.3f}, 顯著)"
-            else:
-                annotation_text += f"<br>(p = {pvalue:.3f}, 不顯著)"
-
-        fig.add_annotation(
-            text=annotation_text,
-            xref="paper", yref="paper",
-            x=0.02, y=0.98,
-            xanchor='left', yanchor='top',
-            showarrow=False,
-            bgcolor="rgba(255, 255, 255, 0.8)",
-            bordercolor="gray",
-            borderwidth=1,
-            borderpad=8,
-            font=dict(size=12, color="black")
-        )
+    # Note: Correlation annotation removed per user request
+    # Users prefer to observe trends visually without statistical text overlay
 
     return fig
