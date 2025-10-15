@@ -30,7 +30,8 @@ from utils.app_viz import (
     create_crosstab_heatmap,
     create_distribution_plot,
     create_bar_chart,
-    create_trend_with_moving_average
+    create_trend_with_moving_average,
+    create_scatter_plot
 )
 
 
@@ -138,9 +139,207 @@ def render(df: pd.DataFrame):
                 width='stretch'
             )
 
+    # ===== Bivariate Analysis =====
+    st.markdown("---")
+    st.subheader("2️⃣ 二維分析 (Bivariate Analysis)")
+    st.markdown("**探索兩個變量之間的關係與相關性（去時間化）**")
+
+    tab1, tab2, tab3 = st.tabs(["PM2.5 vs 風速", "按季節分組", "其他污染物對比"])
+
+    with tab1:
+        st.markdown("#### PM2.5 與風速的關係分析")
+        st.info("💡 每個散點代表一天的平均數據，不顯示具體日期，專注於數值關係")
+
+        # Aggregate by date (daily average)
+        if 'windspeed' in df.columns and 'pm2.5' in df.columns:
+            daily_data = df.groupby(df['date'].dt.date).agg({
+                'windspeed': 'mean',
+                'pm2.5': 'mean'
+            }).reset_index()
+            daily_data.columns = ['date', 'windspeed', 'pm2.5']
+
+            # Remove rows with missing values
+            scatter_data = daily_data[['windspeed', 'pm2.5']].dropna()
+
+            if len(scatter_data) > 0:
+                # Calculate correlation
+                from scipy.stats import pearsonr
+                corr, pvalue = pearsonr(scatter_data['windspeed'], scatter_data['pm2.5'])
+
+                # Calculate linear regression slope
+                import numpy as np
+                z = np.polyfit(scatter_data['windspeed'], scatter_data['pm2.5'], 1)
+                slope = z[0]  # PM2.5 change per 1 m/s windspeed increase
+
+                # Display statistics
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    st.metric(
+                        "相關係數 (r)",
+                        f"{corr:.3f}",
+                        help="Pearson相關係數，範圍-1到+1"
+                    )
+
+                with col2:
+                    st.metric(
+                        "回歸斜率",
+                        f"{slope:.2f}",
+                        delta="μg/m³ per m/s",
+                        help="風速每增加1 m/s，PM2.5平均變化量"
+                    )
+
+                # Create scatter plot
+                fig = create_scatter_plot(
+                    df=scatter_data,
+                    x_col='windspeed',
+                    y_col='pm2.5',
+                    title='PM2.5 與風速的關係（每日平均數據）',
+                    show_trendline=True
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+                # Data summary
+                with st.expander("📋 查看數據摘要"):
+                    summary_col1, summary_col2 = st.columns(2)
+
+                    with summary_col1:
+                        st.write("**風速統計 (m/s)**")
+                        st.write(f"- 平均: {scatter_data['windspeed'].mean():.2f}")
+                        st.write(f"- 中位數: {scatter_data['windspeed'].median():.2f}")
+                        st.write(f"- 標準差: {scatter_data['windspeed'].std():.2f}")
+                        st.write(f"- 範圍: {scatter_data['windspeed'].min():.2f} ~ {scatter_data['windspeed'].max():.2f}")
+
+                    with summary_col2:
+                        st.write("**PM2.5統計 (μg/m³)**")
+                        st.write(f"- 平均: {scatter_data['pm2.5'].mean():.2f}")
+                        st.write(f"- 中位數: {scatter_data['pm2.5'].median():.2f}")
+                        st.write(f"- 標準差: {scatter_data['pm2.5'].std():.2f}")
+                        st.write(f"- 範圍: {scatter_data['pm2.5'].min():.2f} ~ {scatter_data['pm2.5'].max():.2f}")
+
+                    st.write(f"**樣本數**: {len(scatter_data)} 天")
+
+            else:
+                st.warning("⚠️ 數據不足，無法進行二維分析")
+        else:
+            st.error("❌ 缺少必要欄位 (windspeed 或 pm2.5)")
+
+    with tab2:
+        st.markdown("#### 按季節分組的關係分析")
+        st.info("💡 觀察不同季節中 PM2.5 與風速的關係是否有差異")
+
+        if 'windspeed' in df.columns and 'pm2.5' in df.columns and 'season' in df.columns:
+            # Aggregate by date with season
+            daily_data_season = df.groupby(df['date'].dt.date).agg({
+                'windspeed': 'mean',
+                'pm2.5': 'mean',
+                'season': 'first'
+            }).reset_index()
+            daily_data_season.columns = ['date', 'windspeed', 'pm2.5', 'season']
+
+            scatter_data_season = daily_data_season[['windspeed', 'pm2.5', 'season']].dropna()
+
+            if len(scatter_data_season) > 0:
+                # Create scatter plot with season coloring
+                fig = create_scatter_plot(
+                    df=scatter_data_season,
+                    x_col='windspeed',
+                    y_col='pm2.5',
+                    title='PM2.5 與風速的關係（按季節著色）',
+                    show_trendline=True,
+                    color_col='season'
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+                # Calculate correlation by season
+                st.markdown("#### 各季節相關性分析")
+
+                season_stats = []
+                for season in scatter_data_season['season'].unique():
+                    season_df = scatter_data_season[scatter_data_season['season'] == season]
+                    if len(season_df) > 2:
+                        from scipy.stats import pearsonr
+                        corr_s, pval_s = pearsonr(season_df['windspeed'], season_df['pm2.5'])
+                        season_stats.append({
+                            '季節': season,
+                            '樣本數': len(season_df),
+                            '相關係數': f"{corr_s:.3f}",
+                            'p-value': f"{pval_s:.4f}",
+                            '平均風速': f"{season_df['windspeed'].mean():.2f}",
+                            '平均PM2.5': f"{season_df['pm2.5'].mean():.2f}"
+                        })
+
+                if season_stats:
+                    season_stats_df = pd.DataFrame(season_stats)
+                    st.dataframe(season_stats_df, use_container_width=True)
+            else:
+                st.warning("⚠️ 數據不足，無法進行季節分析")
+        else:
+            st.error("❌ 缺少必要欄位 (windspeed, pm2.5 或 season)")
+
+    with tab3:
+        st.markdown("#### 其他污染物對比分析")
+
+        pollutant_options = []
+        for col in ['pm2.5', 'pm10', 'o3', 'co', 'so2', 'no2']:
+            if col in df.columns:
+                pollutant_options.append(col)
+
+        if len(pollutant_options) >= 2:
+            col1, col2 = st.columns(2)
+
+            with col1:
+                x_var = st.selectbox("選擇 X 軸變量", pollutant_options, key='x_var_scatter')
+
+            with col2:
+                y_var = st.selectbox(
+                    "選擇 Y 軸變量",
+                    [p for p in pollutant_options if p != x_var],
+                    key='y_var_scatter'
+                )
+
+            # Aggregate by date
+            daily_custom = df.groupby(df['date'].dt.date).agg({
+                x_var: 'mean',
+                y_var: 'mean'
+            }).reset_index()
+            daily_custom.columns = ['date', x_var, y_var]
+
+            scatter_custom = daily_custom[[x_var, y_var]].dropna()
+
+            if len(scatter_custom) > 0:
+                # Calculate correlation
+                from scipy.stats import pearsonr
+                corr_c, pvalue_c = pearsonr(scatter_custom[x_var], scatter_custom[y_var])
+
+                # Calculate slope
+                import numpy as np
+                z_c = np.polyfit(scatter_custom[x_var], scatter_custom[y_var], 1)
+                slope_c = z_c[0]
+
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("相關係數", f"{corr_c:.3f}")
+                with col2:
+                    st.metric("回歸斜率", f"{slope_c:.2f}")
+
+                # Create scatter plot
+                fig = create_scatter_plot(
+                    df=scatter_custom,
+                    x_col=x_var,
+                    y_col=y_var,
+                    title=f'{y_var.upper()} vs {x_var.upper()}',
+                    show_trendline=True
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.warning("⚠️ 數據不足")
+        else:
+            st.warning("⚠️ 可用污染物欄位不足（需至少2個）")
+
     # ===== Time Series Analysis =====
     st.markdown("---")
-    st.subheader("2️⃣ 時間序列分析")
+    st.subheader("3️⃣ 時間序列分析")
 
     tab1, tab2, tab3 = st.tabs(["AQI趨勢", "污染物趨勢", "移動平均"])
 
@@ -206,7 +405,7 @@ def render(df: pd.DataFrame):
 
     # ===== Crosstab Analysis =====
     st.markdown("---")
-    st.subheader("3️⃣ 交叉表分析 (Crosstab)")
+    st.subheader("4️⃣ 交叉表分析 (Crosstab)")
 
     tab1, tab2 = st.tabs(["縣市 × 月份", "區域 × 季節"])
 
@@ -257,7 +456,7 @@ def render(df: pd.DataFrame):
 
     # ===== Distribution Analysis =====
     st.markdown("---")
-    st.subheader("4️⃣ 分布分析")
+    st.subheader("5️⃣ 分布分析")
 
     col1, col2 = st.columns(2)
 
@@ -308,7 +507,7 @@ def render(df: pd.DataFrame):
 
     # ===== Air Quality Structure Analysis =====
     st.markdown("---")
-    st.subheader("5️⃣ 空氣質量結構分析")
+    st.subheader("6️⃣ 空氣質量結構分析")
 
     tab1, tab2, tab3 = st.tabs(["按縣市", "按季節", "按年度"])
 

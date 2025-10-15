@@ -630,3 +630,149 @@ def create_trend_with_moving_average(
     )
 
     return fig
+
+
+def create_scatter_plot(
+    df: pd.DataFrame,
+    x_col: str,
+    y_col: str,
+    title: Optional[str] = None,
+    show_trendline: bool = True,
+    color_col: Optional[str] = None,
+    size_col: Optional[str] = None
+) -> go.Figure:
+    """
+    Create scatter plot for bivariate analysis.
+
+    Args:
+        df: Input DataFrame
+        x_col: Column name for x-axis
+        y_col: Column name for y-axis
+        title: Plot title (auto-generated if None)
+        show_trendline: Whether to show linear regression trendline
+        color_col: Optional column for color grouping (e.g., 'season', 'region')
+        size_col: Optional column for bubble size
+
+    Returns:
+        Plotly Figure object
+
+    Example:
+        >>> fig = create_scatter_plot(df, 'windspeed', 'pm2.5',
+        ...                           color_col='season', show_trendline=True)
+        >>> st.plotly_chart(fig)
+    """
+    # Remove rows with missing values in required columns
+    required_cols = [x_col, y_col]
+    if color_col:
+        required_cols.append(color_col)
+    if size_col:
+        required_cols.append(size_col)
+
+    df_clean = df[required_cols].dropna()
+
+    if len(df_clean) == 0:
+        logger.warning(f"No valid data for scatter plot: {x_col} vs {y_col}")
+        # Return empty figure with message
+        fig = go.Figure()
+        fig.add_annotation(
+            text="無有效數據可顯示",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5, showarrow=False,
+            font=dict(size=20, color="gray")
+        )
+        return fig
+
+    # Calculate correlation coefficient
+    from scipy.stats import pearsonr
+    try:
+        corr, pvalue = pearsonr(df_clean[x_col], df_clean[y_col])
+    except Exception as e:
+        logger.warning(f"Failed to calculate correlation: {e}")
+        corr, pvalue = None, None
+
+    # Create scatter plot
+    if color_col:
+        fig = px.scatter(
+            df_clean,
+            x=x_col,
+            y=y_col,
+            color=color_col,
+            size=size_col if size_col else None,
+            title=title or f"{y_col.upper()} vs {x_col.upper()}",
+            labels={x_col: x_col.upper(), y_col: y_col.upper()},
+            trendline="ols" if show_trendline else None,
+            opacity=0.6
+        )
+    else:
+        fig = px.scatter(
+            df_clean,
+            x=x_col,
+            y=y_col,
+            size=size_col if size_col else None,
+            title=title or f"{y_col.upper()} vs {x_col.upper()}",
+            labels={x_col: x_col.upper(), y_col: y_col.upper()},
+            trendline="ols" if show_trendline else None,
+            opacity=0.6,
+            color_discrete_sequence=['#1f77b4']
+        )
+
+    # Update layout
+    fig.update_layout(
+        template='plotly_white',
+        height=500,
+        hovermode='closest',
+        hoverlabel=dict(
+            bgcolor="white",
+            font_size=14,
+            font_family="Arial, Microsoft YaHei, sans-serif",
+            font_color="black"
+        )
+    )
+
+    # Update traces for better visibility
+    fig.update_traces(
+        marker=dict(
+            size=8 if not size_col else None,
+            line=dict(width=1, color='white')
+        )
+    )
+
+    # Add correlation annotation if available
+    if corr is not None:
+        # Determine correlation strength
+        if abs(corr) >= 0.7:
+            strength = "強"
+        elif abs(corr) >= 0.4:
+            strength = "中度"
+        elif abs(corr) >= 0.2:
+            strength = "弱"
+        else:
+            strength = "極弱"
+
+        direction = "正" if corr > 0 else "負"
+
+        annotation_text = f"相關係數 r = {corr:.3f}<br>{strength}{direction}相關"
+        if pvalue is not None:
+            if pvalue < 0.001:
+                annotation_text += "<br>(p < 0.001, 極顯著)"
+            elif pvalue < 0.01:
+                annotation_text += f"<br>(p = {pvalue:.3f}, 顯著)"
+            elif pvalue < 0.05:
+                annotation_text += f"<br>(p = {pvalue:.3f}, 顯著)"
+            else:
+                annotation_text += f"<br>(p = {pvalue:.3f}, 不顯著)"
+
+        fig.add_annotation(
+            text=annotation_text,
+            xref="paper", yref="paper",
+            x=0.02, y=0.98,
+            xanchor='left', yanchor='top',
+            showarrow=False,
+            bgcolor="rgba(255, 255, 255, 0.8)",
+            bordercolor="gray",
+            borderwidth=1,
+            borderpad=8,
+            font=dict(size=12, color="black")
+        )
+
+    return fig
