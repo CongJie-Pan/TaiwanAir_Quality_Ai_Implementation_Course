@@ -172,22 +172,12 @@ def render(df: pd.DataFrame):
                 slope = z[0]  # PM2.5 change per 1 m/s windspeed increase
 
                 # Display statistics
-                col1, col2 = st.columns(2)
-
-                with col1:
-                    st.metric(
-                        "相關係數 (r)",
-                        f"{corr:.3f}",
-                        help="Pearson相關係數，範圍-1到+1"
-                    )
-
-                with col2:
-                    st.metric(
-                        "回歸斜率",
-                        f"{slope:.2f}",
-                        delta="μg/m³ per m/s",
-                        help="風速每增加1 m/s，PM2.5平均變化量"
-                    )
+                st.metric(
+                    "回歸斜率",
+                    f"{slope:.2f}",
+                    delta="μg/m³ per m/s",
+                    help="風速每增加1 m/s，PM2.5平均變化量"
+                )
 
                 # Create scatter plot
                 fig = create_scatter_plot(
@@ -317,11 +307,7 @@ def render(df: pd.DataFrame):
                 z_c = np.polyfit(scatter_custom[x_var], scatter_custom[y_var], 1)
                 slope_c = z_c[0]
 
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.metric("相關係數", f"{corr_c:.3f}")
-                with col2:
-                    st.metric("回歸斜率", f"{slope_c:.2f}")
+                st.metric("回歸斜率", f"{slope_c:.2f}")
 
                 # Create scatter plot
                 fig = create_scatter_plot(
