@@ -16,6 +16,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
+import plotly.graph_objects as go
 import sys
 from pathlib import Path
 
@@ -144,47 +145,47 @@ def render(df: pd.DataFrame):
     st.subheader("2️⃣ 二維分析 (Bivariate Analysis)")
     st.markdown("**探索兩個變量之間的關係與相關性（去時間化）**")
 
-    tab1, tab2, tab3, tab4 = st.tabs(["PM2.5 vs 風速", "按季節分組", "其他污染物對比", "表格檢視"])
+    tab1, tab2, tab3, tab4 = st.tabs(["AQI vs 風速", "按季節分組", "其他污染物對比", "表格檢視"])
 
     with tab1:
-        st.markdown("#### PM2.5 與風速的關係分析")
+        st.markdown("#### AQI 與風速的關係分析")
         st.info("💡 每個散點代表一天的平均數據，不顯示具體日期，專注於數值關係")
 
         # Aggregate by date (daily average)
-        if 'windspeed' in df.columns and 'pm2.5' in df.columns:
+        if 'windspeed' in df.columns and 'aqi' in df.columns:
             daily_data = df.groupby(df['date'].dt.date).agg({
                 'windspeed': 'mean',
-                'pm2.5': 'mean'
+                'aqi': 'mean'
             }).reset_index()
-            daily_data.columns = ['date', 'windspeed', 'pm2.5']
+            daily_data.columns = ['date', 'windspeed', 'aqi']
 
             # Remove rows with missing values
-            scatter_data = daily_data[['windspeed', 'pm2.5']].dropna()
+            scatter_data = daily_data[['windspeed', 'aqi']].dropna()
 
             if len(scatter_data) > 0:
                 # Calculate correlation
                 from scipy.stats import pearsonr
-                corr, pvalue = pearsonr(scatter_data['windspeed'], scatter_data['pm2.5'])
+                corr, pvalue = pearsonr(scatter_data['windspeed'], scatter_data['aqi'])
 
                 # Calculate linear regression slope
                 import numpy as np
-                z = np.polyfit(scatter_data['windspeed'], scatter_data['pm2.5'], 1)
-                slope = z[0]  # PM2.5 change per 1 m/s windspeed increase
+                z = np.polyfit(scatter_data['windspeed'], scatter_data['aqi'], 1)
+                slope = z[0]  # AQI change per 1 m/s windspeed increase
 
                 # Display statistics
                 st.metric(
                     "回歸斜率",
                     f"{slope:.2f}",
-                    delta="μg/m³ per m/s",
-                    help="風速每增加1 m/s，PM2.5平均變化量"
+                    delta="AQI per m/s",
+                    help="風速每增加1 m/s，AQI平均變化量"
                 )
 
                 # Create scatter plot
                 fig = create_scatter_plot(
                     df=scatter_data,
                     x_col='windspeed',
-                    y_col='pm2.5',
-                    title='PM2.5 與風速的關係（每日平均數據）',
+                    y_col='aqi',
+                    title='AQI 與風速的關係（每日平均數據）',
                     show_trendline=True
                 )
                 st.plotly_chart(fig, use_container_width=True)
@@ -207,30 +208,30 @@ def render(df: pd.DataFrame):
                     else:
                         return '強風(≥8.0)'
 
-                # 定義PM2.5空氣品質分類函數
-                def categorize_pm25(pm):
-                    if pm <= 15:
-                        return '良好(0-15)'
-                    elif pm <= 35:
-                        return '普通(16-35)'
-                    elif pm <= 54:
-                        return '對敏感族群不健康(36-54)'
-                    elif pm <= 150:
-                        return '不健康(55-150)'
-                    elif pm <= 250:
-                        return '非常不健康(151-250)'
+                # 定義AQI空氣品質分類函數
+                def categorize_aqi(aqi):
+                    if aqi <= 50:
+                        return '良好(0-50)'
+                    elif aqi <= 100:
+                        return '普通(51-100)'
+                    elif aqi <= 150:
+                        return '對敏感族群不健康(101-150)'
+                    elif aqi <= 200:
+                        return '不健康(151-200)'
+                    elif aqi <= 300:
+                        return '非常不健康(201-300)'
                     else:
-                        return '危害(>250)'
+                        return '危害(>300)'
 
                 # 準備交叉表數據
                 crosstab_data = scatter_data.copy()
                 crosstab_data['風級'] = crosstab_data['windspeed'].apply(categorize_windspeed)
-                crosstab_data['空氣品質'] = crosstab_data['pm2.5'].apply(categorize_pm25)
+                crosstab_data['空氣品質'] = crosstab_data['aqi'].apply(categorize_aqi)
 
                 # 創建交叉統計表（顯示出現次數）
                 crosstab = pd.pivot_table(
                     crosstab_data,
-                    values='pm2.5',
+                    values='aqi',
                     index='風級',
                     columns='空氣品質',
                     aggfunc='count',
@@ -242,8 +243,8 @@ def render(df: pd.DataFrame):
                 crosstab = crosstab.reindex(wind_order, fill_value=0)
 
                 # 定義空氣品質順序（從良好到危害）
-                quality_order = ['良好(0-15)', '普通(16-35)', '對敏感族群不健康(36-54)',
-                                '不健康(55-150)', '非常不健康(151-250)', '危害(>250)']
+                quality_order = ['良好(0-50)', '普通(51-100)', '對敏感族群不健康(101-150)',
+                                '不健康(151-200)', '非常不健康(201-300)', '危害(>300)']
                 crosstab = crosstab.reindex(columns=quality_order, fill_value=0)
 
                 # 轉換為整數
@@ -269,44 +270,86 @@ def render(df: pd.DataFrame):
                         st.write(f"- 範圍: {scatter_data['windspeed'].min():.2f} ~ {scatter_data['windspeed'].max():.2f}")
 
                     with summary_col2:
-                        st.write("**PM2.5統計 (μg/m³)**")
-                        st.write(f"- 平均: {scatter_data['pm2.5'].mean():.2f}")
-                        st.write(f"- 中位數: {scatter_data['pm2.5'].median():.2f}")
-                        st.write(f"- 標準差: {scatter_data['pm2.5'].std():.2f}")
-                        st.write(f"- 範圍: {scatter_data['pm2.5'].min():.2f} ~ {scatter_data['pm2.5'].max():.2f}")
+                        st.write("**AQI統計**")
+                        st.write(f"- 平均: {scatter_data['aqi'].mean():.2f}")
+                        st.write(f"- 中位數: {scatter_data['aqi'].median():.2f}")
+                        st.write(f"- 標準差: {scatter_data['aqi'].std():.2f}")
+                        st.write(f"- 範圍: {scatter_data['aqi'].min():.2f} ~ {scatter_data['aqi'].max():.2f}")
 
                     st.write(f"**樣本數**: {len(scatter_data)} 天")
 
             else:
                 st.warning("⚠️ 數據不足，無法進行二維分析")
         else:
-            st.error("❌ 缺少必要欄位 (windspeed 或 pm2.5)")
+            st.error("❌ 缺少必要欄位 (windspeed 或 aqi)")
 
     with tab2:
         st.markdown("#### 按季節分組的關係分析")
-        st.info("💡 觀察不同季節中 PM2.5 與風速的關係是否有差異")
+        st.info("💡 觀察不同季節中 AQI 與風速的關係是否有差異")
 
-        if 'windspeed' in df.columns and 'pm2.5' in df.columns and 'season' in df.columns:
+        if 'windspeed' in df.columns and 'aqi' in df.columns and 'season' in df.columns:
             # Aggregate by date with season
             daily_data_season = df.groupby(df['date'].dt.date).agg({
                 'windspeed': 'mean',
-                'pm2.5': 'mean',
+                'aqi': 'mean',
                 'season': 'first'
             }).reset_index()
-            daily_data_season.columns = ['date', 'windspeed', 'pm2.5', 'season']
+            daily_data_season.columns = ['date', 'windspeed', 'aqi', 'season']
 
-            scatter_data_season = daily_data_season[['windspeed', 'pm2.5', 'season']].dropna()
+            scatter_data_season = daily_data_season[['windspeed', 'aqi', 'season']].dropna()
 
             if len(scatter_data_season) > 0:
-                # Create scatter plot with season coloring
-                fig = create_scatter_plot(
-                    df=scatter_data_season,
-                    x_col='windspeed',
-                    y_col='pm2.5',
-                    title='PM2.5 與風速的關係（按季節著色）',
-                    show_trendline=True,
-                    color_col='season'
+                # Define season order and color mapping for clear differentiation
+                season_order = ['春季', '夏季', '秋季', '冬季']
+                season_colors = {
+                    '春季': '#32CD32',  # LimeGreen - bright, clearly green
+                    '夏季': '#FF0000',  # Red - represents summer heat
+                    '秋季': '#FFA500',  # Orange - represents autumn harvest
+                    '冬季': '#0070C0'   # Blue - represents winter cold
+                }
+
+                # Ensure season column is categorical with specified order
+                scatter_data_season['season'] = pd.Categorical(
+                    scatter_data_season['season'],
+                    categories=season_order,
+                    ordered=True
                 )
+
+                # Create scatter plot with custom season colors
+                fig = px.scatter(
+                    scatter_data_season,
+                    x='windspeed',
+                    y='aqi',
+                    color='season',
+                    title='AQI 與風速的關係（按季節著色）',
+                    labels={'windspeed': 'WINDSPEED', 'aqi': 'AQI', 'season': '季節'},
+                    trendline="ols",
+                    opacity=0.6,
+                    color_discrete_map=season_colors,
+                    category_orders={'season': season_order}
+                )
+
+                # Update layout for better visualization
+                fig.update_layout(
+                    template='plotly_white',
+                    height=500,
+                    hovermode='closest',
+                    hoverlabel=dict(
+                        bgcolor="white",
+                        font_size=14,
+                        font_family="Arial, Microsoft YaHei, sans-serif",
+                        font_color="black"
+                    )
+                )
+
+                # Update marker style
+                fig.update_traces(
+                    marker=dict(
+                        size=8,
+                        line=dict(width=1, color='white')
+                    )
+                )
+
                 st.plotly_chart(fig, use_container_width=True)
 
                 # Calculate correlation by season
@@ -317,14 +360,14 @@ def render(df: pd.DataFrame):
                     season_df = scatter_data_season[scatter_data_season['season'] == season]
                     if len(season_df) > 2:
                         from scipy.stats import pearsonr
-                        corr_s, pval_s = pearsonr(season_df['windspeed'], season_df['pm2.5'])
+                        corr_s, pval_s = pearsonr(season_df['windspeed'], season_df['aqi'])
                         season_stats.append({
                             '季節': season,
                             '樣本數': len(season_df),
                             '相關係數': f"{corr_s:.3f}",
                             'p-value': f"{pval_s:.4f}",
                             '平均風速': f"{season_df['windspeed'].mean():.2f}",
-                            '平均PM2.5': f"{season_df['pm2.5'].mean():.2f}"
+                            '平均AQI': f"{season_df['aqi'].mean():.2f}"
                         })
 
                 if season_stats:
@@ -333,7 +376,7 @@ def render(df: pd.DataFrame):
             else:
                 st.warning("⚠️ 數據不足，無法進行季節分析")
         else:
-            st.error("❌ 缺少必要欄位 (windspeed, pm2.5 或 season)")
+            st.error("❌ 缺少必要欄位 (windspeed, aqi 或 season)")
 
     with tab3:
         st.markdown("#### 其他污染物對比分析")
@@ -395,22 +438,22 @@ def render(df: pd.DataFrame):
         st.markdown("#### 數據表格檢視")
         st.info("💡 顯示散點圖中每日平均數據的對應表格")
 
-        if 'windspeed' in df.columns and 'pm2.5' in df.columns:
+        if 'windspeed' in df.columns and 'aqi' in df.columns:
             # 使用與 Tab 1 相同的聚合邏輯
             daily_table_data = df.groupby(df['date'].dt.date).agg({
                 'windspeed': 'mean',
-                'pm2.5': 'mean'
+                'aqi': 'mean'
             }).reset_index()
 
             # 格式化欄位名稱
-            daily_table_data.columns = ['日期', '風速 (m/s)', 'PM2.5 (μg/m³)']
+            daily_table_data.columns = ['日期', '風速 (m/s)', 'AQI']
 
             # 移除缺失值
             daily_table_data = daily_table_data.dropna()
 
             # 數值格式化（保留2位小數）
             daily_table_data['風速 (m/s)'] = daily_table_data['風速 (m/s)'].round(2)
-            daily_table_data['PM2.5 (μg/m³)'] = daily_table_data['PM2.5 (μg/m³)'].round(2)
+            daily_table_data['AQI'] = daily_table_data['AQI'].round(2)
 
             if len(daily_table_data) > 0:
                 # 顯示表格
@@ -425,7 +468,7 @@ def render(df: pd.DataFrame):
             else:
                 st.warning("⚠️ 數據不足，無法顯示表格")
         else:
-            st.error("❌ 缺少必要欄位 (windspeed 或 pm2.5)")
+            st.error("❌ 缺少必要欄位 (windspeed 或 aqi)")
 
     # ===== Time Series Analysis =====
     st.markdown("---")
@@ -511,15 +554,60 @@ def render(df: pd.DataFrame):
                 aggfunc='mean'
             )
 
-            # Display heatmap
-            fig = create_crosstab_heatmap(
-                df,
-                'month',
-                'county',
-                'aqi',
-                'mean',
-                '各縣市各月份平均AQI熱力圖'
+            # Define county order from North to South (geographic order) - English names
+            # Based on app_utils.py region mapping
+            county_order = [
+                # 北部 (North)
+                'Keelung City', 'Taipei City', 'New Taipei City', 'Taoyuan City',
+                'Hsinchu City', 'Hsinchu County',
+                # 中部 (Central)
+                'Miaoli County', 'Taichung City', 'Changhua County',
+                'Nantou County', 'Yunlin County',
+                # 南部 (South)
+                'Chiayi County', 'Chiayi City', 'Tainan City',
+                'Kaohsiung City', 'Pingtung County',
+                # 東部 (East)
+                'Yilan County', 'Hualien County', 'Taitung County',
+                # 離島 (Outlying Islands)
+                'Penghu County', 'Kinmen County', 'Lienchiang County'
+            ]
+
+            # Reindex pivot_data to follow geographic order
+            # Only include counties that actually exist in the data
+            existing_counties = [c for c in county_order if c in pivot_data.index]
+            pivot_data = pivot_data.reindex(existing_counties)
+
+            # Create heatmap using plotly directly (to control county order)
+            fig = go.Figure(data=go.Heatmap(
+                z=pivot_data.values,
+                x=pivot_data.columns,
+                y=pivot_data.index,
+                colorscale='RdYlGn_r',
+                text=pivot_data.values.round(2),
+                texttemplate='%{z:.2f}',
+                textfont={"size": 10},
+                colorbar=dict(title='AQI')
+            ))
+
+            fig.update_layout(
+                title='各縣市各月份平均AQI熱力圖',
+                xaxis_title='月份 (month)',
+                yaxis_title='縣市 (county)',
+                template='plotly_white',
+                height=500,
+                # Force yaxis to use custom geographic order (North to South)
+                yaxis=dict(
+                    categoryorder='array',
+                    categoryarray=existing_counties
+                ),
+                hoverlabel=dict(
+                    bgcolor="white",
+                    font_size=14,
+                    font_family="Arial, Microsoft YaHei, sans-serif",
+                    font_color="black"
+                )
             )
+
             st.plotly_chart(fig, width='stretch')
 
             # Display table
