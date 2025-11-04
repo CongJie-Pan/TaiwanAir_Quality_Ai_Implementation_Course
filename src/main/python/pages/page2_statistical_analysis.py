@@ -144,7 +144,7 @@ def render(df: pd.DataFrame):
     st.subheader("2️⃣ 二維分析 (Bivariate Analysis)")
     st.markdown("**探索兩個變量之間的關係與相關性（去時間化）**")
 
-    tab1, tab2, tab3 = st.tabs(["PM2.5 vs 風速", "按季節分組", "其他污染物對比"])
+    tab1, tab2, tab3, tab4 = st.tabs(["PM2.5 vs 風速", "按季節分組", "其他污染物對比", "表格檢視"])
 
     with tab1:
         st.markdown("#### PM2.5 與風速的關係分析")
@@ -188,6 +188,74 @@ def render(df: pd.DataFrame):
                     show_trendline=True
                 )
                 st.plotly_chart(fig, use_container_width=True)
+
+                # Crosstab table: Wind Speed Level × Air Quality
+                st.markdown("---")
+                st.markdown("#### 📋 風級 × 空氣品質交叉統計表")
+                st.info("💡 表格顯示不同風級與空氣品質組合下的出現次數（天數）")
+
+                # 定義風級分類函數
+                def categorize_windspeed(ws):
+                    if ws <= 1.5:
+                        return '無風(0-1.5)'
+                    elif ws <= 3.3:
+                        return '輕風(1.6-3.3)'
+                    elif ws <= 5.4:
+                        return '微風(3.4-5.4)'
+                    elif ws <= 7.9:
+                        return '和風(5.5-7.9)'
+                    else:
+                        return '強風(≥8.0)'
+
+                # 定義PM2.5空氣品質分類函數
+                def categorize_pm25(pm):
+                    if pm <= 15:
+                        return '良好(0-15)'
+                    elif pm <= 35:
+                        return '普通(16-35)'
+                    elif pm <= 54:
+                        return '對敏感族群不健康(36-54)'
+                    elif pm <= 150:
+                        return '不健康(55-150)'
+                    elif pm <= 250:
+                        return '非常不健康(151-250)'
+                    else:
+                        return '危害(>250)'
+
+                # 準備交叉表數據
+                crosstab_data = scatter_data.copy()
+                crosstab_data['風級'] = crosstab_data['windspeed'].apply(categorize_windspeed)
+                crosstab_data['空氣品質'] = crosstab_data['pm2.5'].apply(categorize_pm25)
+
+                # 創建交叉統計表（顯示出現次數）
+                crosstab = pd.pivot_table(
+                    crosstab_data,
+                    values='pm2.5',
+                    index='風級',
+                    columns='空氣品質',
+                    aggfunc='count',
+                    fill_value=0
+                )
+
+                # 定義風級順序（從無風到強風）
+                wind_order = ['無風(0-1.5)', '輕風(1.6-3.3)', '微風(3.4-5.4)', '和風(5.5-7.9)', '強風(≥8.0)']
+                crosstab = crosstab.reindex(wind_order, fill_value=0)
+
+                # 定義空氣品質順序（從良好到危害）
+                quality_order = ['良好(0-15)', '普通(16-35)', '對敏感族群不健康(36-54)',
+                                '不健康(55-150)', '非常不健康(151-250)', '危害(>250)']
+                crosstab = crosstab.reindex(columns=quality_order, fill_value=0)
+
+                # 轉換為整數
+                crosstab = crosstab.astype(int)
+
+                # 顯示交叉表
+                st.dataframe(
+                    crosstab,
+                    use_container_width=True
+                )
+
+                st.caption("📊 數值為該組合的出現次數（天數），0 表示無數據")
 
                 # Data summary
                 with st.expander("📋 查看數據摘要"):
@@ -322,6 +390,42 @@ def render(df: pd.DataFrame):
                 st.warning("⚠️ 數據不足")
         else:
             st.warning("⚠️ 可用污染物欄位不足（需至少2個）")
+
+    with tab4:
+        st.markdown("#### 數據表格檢視")
+        st.info("💡 顯示散點圖中每日平均數據的對應表格")
+
+        if 'windspeed' in df.columns and 'pm2.5' in df.columns:
+            # 使用與 Tab 1 相同的聚合邏輯
+            daily_table_data = df.groupby(df['date'].dt.date).agg({
+                'windspeed': 'mean',
+                'pm2.5': 'mean'
+            }).reset_index()
+
+            # 格式化欄位名稱
+            daily_table_data.columns = ['日期', '風速 (m/s)', 'PM2.5 (μg/m³)']
+
+            # 移除缺失值
+            daily_table_data = daily_table_data.dropna()
+
+            # 數值格式化（保留2位小數）
+            daily_table_data['風速 (m/s)'] = daily_table_data['風速 (m/s)'].round(2)
+            daily_table_data['PM2.5 (μg/m³)'] = daily_table_data['PM2.5 (μg/m³)'].round(2)
+
+            if len(daily_table_data) > 0:
+                # 顯示表格
+                st.dataframe(
+                    daily_table_data,
+                    use_container_width=True,
+                    hide_index=True
+                )
+
+                # 數據摘要
+                st.caption(f"📊 總資料筆數：{len(daily_table_data)} 天")
+            else:
+                st.warning("⚠️ 數據不足，無法顯示表格")
+        else:
+            st.error("❌ 缺少必要欄位 (windspeed 或 pm2.5)")
 
     # ===== Time Series Analysis =====
     st.markdown("---")
