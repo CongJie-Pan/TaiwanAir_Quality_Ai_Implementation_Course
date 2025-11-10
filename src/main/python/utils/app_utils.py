@@ -105,6 +105,52 @@ def add_log(message: str, log_list: Optional[List[str]] = None) -> None:
     logger.info(message)
 
 
+def categorize_windspeed(windspeed: float) -> str:
+    """
+    Categorize wind speed into Beaufort scale levels (meters per second).
+
+    This unified function ensures consistent wind level classification across
+    all pages and visualizations in the application.
+
+    Wind Level Standards (Beaufort Scale adapted for m/s):
+        - 無風 (Calm): 0 - 1.5 m/s
+        - 輕風 (Light air): 1.6 - 3.3 m/s
+        - 微風 (Light breeze): 3.4 - 5.4 m/s
+        - 和風 (Gentle breeze): 5.5 - 7.9 m/s
+        - 強風 (Moderate breeze): ≥ 8.0 m/s
+
+    Args:
+        windspeed: Wind speed value in meters per second
+
+    Returns:
+        String label representing the wind level category
+
+    Example:
+        >>> categorize_windspeed(1.2)
+        '無風(0-1.5)'
+        >>> categorize_windspeed(2.5)
+        '輕風(1.6-3.3)'
+        >>> categorize_windspeed(10.0)
+        '強風(≥8.0)'
+
+    Note:
+        This function is the single source of truth for wind level classification.
+        All pages (page2, page3, etc.) should use this function to ensure consistency.
+    """
+    if pd.isna(windspeed):
+        return None
+    elif windspeed <= 1.5:
+        return '無風(0-1.5)'
+    elif windspeed <= 3.3:
+        return '輕風(1.6-3.3)'
+    elif windspeed <= 5.4:
+        return '微風(3.4-5.4)'
+    elif windspeed <= 7.9:
+        return '和風(5.5-7.9)'
+    else:
+        return '強風(≥8.0)'
+
+
 def prepare_data(df: pd.DataFrame) -> pd.DataFrame:
     """
     Prepare data by generating SPCT dimension labels and derived attributes.
@@ -228,11 +274,9 @@ def prepare_data(df: pd.DataFrame) -> pd.DataFrame:
     df['pollutant_category'] = df['pollutant'].map(pollutant_category_map)
 
     # ===== Condition Dimension (C) =====
-    # Wind speed level
-    df['wind_level'] = pd.cut(df['windspeed'],
-                              bins=[0, 1, 3, 5, float('inf')],
-                              labels=['無風', '微風', '輕風', '強風'],
-                              include_lowest=True)
+    # Wind speed level using unified Beaufort scale classification
+    # Note: Using apply() with categorize_windspeed() ensures consistency across all pages
+    df['wind_level'] = df['windspeed'].apply(categorize_windspeed)
 
     # Pollution status indicator
     df['is_exceed'] = df['aqi'] > 100

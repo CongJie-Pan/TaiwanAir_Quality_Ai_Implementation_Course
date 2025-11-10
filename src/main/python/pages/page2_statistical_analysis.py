@@ -25,7 +25,7 @@ parent_dir = Path(__file__).parent.parent
 if str(parent_dir) not in sys.path:
     sys.path.insert(0, str(parent_dir))
 
-from utils.app_utils import 空氣質量結構, get_aqi_color
+from utils.app_utils import 空氣質量結構, get_aqi_color, categorize_windspeed
 from utils.app_viz import (
     create_time_series_plot,
     create_crosstab_heatmap,
@@ -180,33 +180,113 @@ def render(df: pd.DataFrame):
                     help="風速每增加1 m/s，AQI平均變化量"
                 )
 
-                # Create scatter plot
-                fig = create_scatter_plot(
-                    df=scatter_data,
-                    x_col='windspeed',
-                    y_col='aqi',
+                # Add color grouping for key wind level × air quality combinations
+                # Define simplified classification functions for grouping
+                def get_wind_category(ws):
+                    if ws <= 1.5:
+                        return '無風'
+                    elif ws <= 3.3:
+                        return '輕風'
+                    else:
+                        return '其他'
+
+                def get_aqi_category(aqi):
+                    if aqi <= 50:
+                        return '良好'
+                    elif aqi <= 100:
+                        return '普通'
+                    else:
+                        return '其他'
+
+                # Create color grouping column
+                scatter_data = scatter_data.copy()
+                scatter_data['風級分類'] = scatter_data['windspeed'].apply(get_wind_category)
+                scatter_data['空氣品質分類'] = scatter_data['aqi'].apply(get_aqi_category)
+
+                # Create combined group labels for the four key combinations
+                def create_group_label(row):
+                    wind = row['風級分類']
+                    aqi = row['空氣品質分類']
+                    if wind in ['無風', '輕風'] and aqi in ['良好', '普通']:
+                        return f"{wind}×{aqi}"
+                    else:
+                        return '其他組合'
+
+                scatter_data['顏色分組'] = scatter_data.apply(create_group_label, axis=1)
+
+                # Define custom color map with high contrast colors
+                color_map = {
+                    '無風×良好': '#00C853',    # Green - calm wind, good air
+                    '無風×普通': '#FFD600',    # Yellow - calm wind, moderate air
+                    '輕風×良好': '#2196F3',    # Blue - light wind, good air
+                    '輕風×普通': '#FF6D00',    # Orange - light wind, moderate air
+                    '其他組合': '#BDBDBD'      # Light gray - other combinations
+                }
+
+                # Define the order for legend (key groups first)
+                category_order = ['無風×良好', '無風×普通', '輕風×良好', '輕風×普通', '其他組合']
+
+                # Create scatter plot with color grouping
+                fig = px.scatter(
+                    scatter_data,
+                    x='windspeed',
+                    y='aqi',
+                    color='顏色分組',
                     title='AQI 與風速的關係（每日平均數據）',
-                    show_trendline=True
+                    labels={'windspeed': 'WINDSPEED', 'aqi': 'AQI'},
+                    color_discrete_map=color_map,
+                    category_orders={'顏色分組': category_order},
+                    opacity=0.7,
+                    trendline='ols'
                 )
+
+                # Update layout
+                fig.update_layout(
+                    template='plotly_white',
+                    height=500,
+                    hovermode='closest',
+                    hoverlabel=dict(
+                        bgcolor="white",
+                        font_size=14,
+                        font_family="Arial, Microsoft YaHei, sans-serif",
+                        font_color="black"
+                    ),
+                    legend=dict(
+                        title="風級 × AQI",
+                        orientation="v",
+                        yanchor="top",
+                        y=0.99,
+                        xanchor="right",
+                        x=0.99,
+                        bgcolor="rgba(255, 255, 255, 0.9)",
+                        bordercolor="lightgray",
+                        borderwidth=1,
+                        font=dict(color="black"),
+                        title_font=dict(color="black", size=14)
+                    )
+                )
+
+                # Update marker style
+                fig.update_traces(
+                    marker=dict(
+                        size=10,
+                        line=dict(width=1, color='white')
+                    ),
+                    selector=dict(mode='markers')
+                )
+
+                # Extend axes ranges to show key wind level and air quality categories
+                # x-axis: 0-5.4 m/s shows full range of "微風(3.4-5.4)" category
+                # y-axis: 0-150 shows "良好", "普通", and "對敏感族群不健康" categories
+                fig.update_xaxes(range=[0, 5.4])
+                fig.update_yaxes(range=[0, 150])
+
                 st.plotly_chart(fig, use_container_width=True)
 
                 # Crosstab table: Wind Speed Level × Air Quality
                 st.markdown("---")
                 st.markdown("#### 📋 風級 × 空氣品質交叉統計表")
                 st.info("💡 表格顯示不同風級與空氣品質組合下的出現次數（天數）")
-
-                # 定義風級分類函數
-                def categorize_windspeed(ws):
-                    if ws <= 1.5:
-                        return '無風(0-1.5)'
-                    elif ws <= 3.3:
-                        return '輕風(1.6-3.3)'
-                    elif ws <= 5.4:
-                        return '微風(3.4-5.4)'
-                    elif ws <= 7.9:
-                        return '和風(5.5-7.9)'
-                    else:
-                        return '強風(≥8.0)'
 
                 # 定義AQI空氣品質分類函數
                 def categorize_aqi(aqi):
