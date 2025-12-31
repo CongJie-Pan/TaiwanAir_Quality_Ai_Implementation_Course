@@ -1,0 +1,11 @@
+numpy
+pandas
+plotly
+python-pptx
+matplotlib
+scikit-learn
+scipy
+streamlit
+streamlit-navigation-bar
+statsmodels
+pmdarima
