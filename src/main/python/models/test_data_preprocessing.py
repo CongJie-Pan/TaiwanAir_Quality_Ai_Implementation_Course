@@ -28,6 +28,7 @@ from data_preprocessing import (
     clean_data,
     create_lag_features,
     get_lag_feature_names,
+    encode_season_onehot,
 )
 
 
@@ -358,6 +359,46 @@ class TestEncodeFeatures:
         
         assert 'season' in encoders
         assert hasattr(encoders['season'], 'inverse_transform')
+
+
+# ============================================================================
+# Test: encode_season_onehot()
+# ============================================================================
+
+class TestEncodeSeasonOneHot:
+    """Tests for season one-hot encoding."""
+    
+    def test_onehot_columns_created(self, sample_df):
+        """Test that 4 binary columns are created."""
+        df = add_season(sample_df)
+        result = encode_season_onehot(df)
+        
+        expected_cols = ['season_spring', 'season_summer', 'season_autumn', 'season_winter']
+        for col in expected_cols:
+            assert col in result.columns
+            
+    def test_onehot_values_correct(self, sample_df):
+        """Test that values are correctly creating using 1/0."""
+        df = add_season(sample_df)
+        result = encode_season_onehot(df)
+        
+        # Test Spring (Month 3 => 春季 => spring)
+        # Should be: spring=1, others=0
+        spring_row = result[result['month'] == 3].iloc[0]
+        assert spring_row['season'] == '春季'
+        assert spring_row['season_spring'] == 1
+        assert spring_row['season_summer'] == 0
+        assert spring_row['season_autumn'] == 0
+        assert spring_row['season_winter'] == 0
+        
+    def test_onehot_completeness(self, sample_df):
+        """Test that every row has exactly one season set to 1."""
+        df = add_season(sample_df)
+        result = encode_season_onehot(df)
+        
+        season_cols = ['season_spring', 'season_summer', 'season_autumn', 'season_winter']
+        # Sum across rows should be 1 for valid seasons
+        assert (result[season_cols].sum(axis=1) == 1).all()
 
 
 # ============================================================================

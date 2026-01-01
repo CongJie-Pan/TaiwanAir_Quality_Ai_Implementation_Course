@@ -85,7 +85,7 @@
         - `val_2023_h1.parquet` (118,963 rows, 1.2 MB)
         - `test_2023_h2.parquet` (118,963 rows, 1.2 MB)
 
-### [ ] **Task ID**: FR-001-C
+### [x] **Task ID**: FR-001-C
 - **Task Name**: 季節編碼改進
 - **Work Description**:
     - Why: LabelEncoder 會讓模型誤認為季節有順序關係（如冬季=0 < 夏季=1）
@@ -94,14 +94,21 @@
     - Materials: `pandas.get_dummies()` 或 `sklearn.preprocessing.OneHotEncoder`
     - Personnel: 潘驄杰
 - **Deliverables**:
-    - [ ] 新增 `encode_onehot()` 函式
-    - [ ] 更新特徵欄位文件
+    - [x] 新增 `encode_onehot()` 函式
+    - [x] 更新特徵欄位文件
 - **Testing Plan**:
-    - 驗證產出 4 個 season_* 欄位
+    - 驗證產出 4 個 season_* 欄位 ✅
 - **Dependencies**: FR-001
 - **Constraints**: 需確保編碼與既有資料相容
-- **Completion Status**: 未開始
+- **Completion Status**: ✅ 已完成 (2026/01/01)
 - **Priority**: P1
+- **Complete Summary**:
+    - 實作 `encode_season_onehot()` 函式，手動建立 `season_spring/summer/autumn/winter` 4 個二元欄位 (使用英文避免編碼問題)
+    - 移除原本的 `season_encoded` (Label Encoding)
+    - 更新 `MODEL_COLS` 加入新特徵
+    - 更新單元測試 `TestEncodeSeasonOneHot` 驗證編碼正確性
+    - 重新產生訓練資料：`train_2017_2022.parquet`, `val_2023_h1.parquet`, `test_2023_h2.parquet`
+    - 驗證資料：確認包含 `season_spring` 等欄位且數值正確 (0/1)
 
 ### [ ] **Task ID**: FR-001-D
 - **Task Name**: 類別不平衡檢查

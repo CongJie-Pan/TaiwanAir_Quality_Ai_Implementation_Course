@@ -235,7 +235,9 @@ MODEL_COLS = [
     'aqi_level',      # 分類目標
     'windspeed',      # 特徵
     'month', 'hour',  # 時間特徵
-    'season', 'season_encoded',      # 季節
+    'season',         # 原始季節 (供參考)
+    # One-Hot Encoded Seasons (取代 season_encoded)
+    'season_spring', 'season_summer', 'season_autumn', 'season_winter',
     'county_encoded',                 # 空間
     'wind_level', 'wind_level_encoded',  # 風速等級
     # Lag Features (避免 Data Leakage)
@@ -366,6 +368,8 @@ def save_multiyear_splits(
     required = ['aqi', 'aqi_level', 'windspeed', 'month', 'date', 'season']
     df_train = clean_data(df_train, required)
     df_train, encoders = encode_categorical_features(df_train)
+    # One-Hot Encoding for season
+    df_train = encode_season_onehot(df_train)
     
     # Load and process test year data
     print(f"\n[3/4] Loading test year data ({test_year})...")
@@ -380,6 +384,9 @@ def save_multiyear_splits(
             df_test_year[f'{col}_encoded'] = df_test_year[col].astype(str).apply(
                 lambda x: le.transform([x])[0] if x in le.classes_ else -1
             )
+            
+    # One-Hot Encoding for season
+    df_test_year = encode_season_onehot(df_test_year)
     
     # Sort and split test year
     df_test_year = df_test_year.sort_values('date').reset_index(drop=True)
@@ -624,10 +631,49 @@ def clean_data(df: pd.DataFrame, required_cols: List[str]) -> pd.DataFrame:
     return df
 
 
+
+def encode_season_onehot(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    One-Hot encode season column manually.
+    
+    Creates 4 binary columns:
+    - season_spring
+    - season_summer
+    - season_autumn
+    - season_winter
+    
+    Args:
+        df: DataFrame with 'season' column
+        
+    Returns:
+        DataFrame with one-hot encoded columns added
+    """
+    df = df.copy()
+    # Map Chinese season names to English suffixes
+    season_map = {
+        '春季': 'spring',
+        '夏季': 'summer',
+        '秋季': 'autumn',
+        '冬季': 'winter'
+    }
+    
+    # Ensure season column exists
+    if 'season' not in df.columns:
+        print("Warning: 'season' column not found, skipping one-hot encoding.")
+        return df
+        
+    for ch_name, en_suffix in season_map.items():
+        # Create binary column (1 if match, 0 if not)
+        df[f'season_{en_suffix}'] = (df['season'] == ch_name).astype(int)
+        
+    return df
+
+
 def encode_categorical_features(
     df: pd.DataFrame,
-    cat_cols: List[str] = ['season', 'county', 'wind_level']
+    cat_cols: List[str] = ['county', 'wind_level']
 ) -> Tuple[pd.DataFrame, dict]:
+
     """
     Encode categorical features using LabelEncoder.
     
