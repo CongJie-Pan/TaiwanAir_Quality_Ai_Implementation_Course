@@ -6,3 +6,5 @@
 ### 2026/1/1
 
 - Phase 1 執行完後，要讓AI重新作為機器學習工程師與DeepMind 科學家，去分析產出的資料，然後綜整當前模型要使用data的狀況出來，整理為prompt給perplexity ai 評估。
+
+contine : python -m pytest src/main/python/models/test_linear_regression.py -v
