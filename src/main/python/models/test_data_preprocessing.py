@@ -29,6 +29,7 @@ from data_preprocessing import (
     create_lag_features,
     get_lag_feature_names,
     encode_season_onehot,
+    check_class_distribution,
 )
 
 
@@ -486,6 +487,92 @@ class TestLagFeatures:
         names = get_lag_feature_names(lag_cols=['pm2.5'], lags=[1, 24])
         
         assert names == ['pm2.5_lag1', 'pm2.5_lag24']
+
+
+# ============================================================================
+# Test: check_class_distribution()
+# ============================================================================
+
+class TestCheckClassDistribution:
+    """Tests for class distribution checking function (FR-001-D)."""
+    
+    @pytest.fixture
+    def balanced_df(self):
+        """Create a DataFrame with balanced class distribution."""
+        return pd.DataFrame({
+            'aqi_level': ['良好'] * 34 + ['普通'] * 33 + ['對敏感族群不健康'] * 33,
+            'aqi': list(range(100))
+        })
+    
+    @pytest.fixture
+    def imbalanced_df(self):
+        """Create a DataFrame with severe class imbalance."""
+        return pd.DataFrame({
+            'aqi_level': ['良好'] * 80 + ['普通'] * 15 + ['對敏感族群不健康'] * 5,
+            'aqi': list(range(100))
+        })
+    
+    def test_returns_dict(self, balanced_df):
+        """Test that function returns a dictionary."""
+        result = check_class_distribution(balanced_df, verbose=False)
+        assert isinstance(result, dict)
+    
+    def test_output_keys(self, balanced_df):
+        """Test that all expected keys are in output."""
+        result = check_class_distribution(balanced_df, verbose=False)
+        
+        expected_keys = ['counts', 'percentages', 'is_imbalanced', 
+                         'minority_classes', 'majority_class', 'imbalance_ratio']
+        for key in expected_keys:
+            assert key in result, f"Missing key: {key}"
+    
+    def test_balanced_detection(self, balanced_df):
+        """Test that balanced distribution is correctly detected."""
+        result = check_class_distribution(balanced_df, verbose=False)
+        
+        assert result['is_imbalanced'] == False
+        assert len(result['minority_classes']) == 0
+    
+    def test_imbalanced_detection(self, imbalanced_df):
+        """Test that imbalanced distribution is correctly detected."""
+        result = check_class_distribution(imbalanced_df, verbose=False)
+        
+        assert result['is_imbalanced'] == True
+        assert '對敏感族群不健康' in result['minority_classes']
+    
+    def test_counts_correct(self, imbalanced_df):
+        """Test that counts are correct."""
+        result = check_class_distribution(imbalanced_df, verbose=False)
+        
+        assert result['counts']['良好'] == 80
+        assert result['counts']['普通'] == 15
+        assert result['counts']['對敏感族群不健康'] == 5
+    
+    def test_percentages_sum_to_one(self, imbalanced_df):
+        """Test that percentages sum to 1.0."""
+        result = check_class_distribution(imbalanced_df, verbose=False)
+        
+        assert abs(result['percentages'].sum() - 1.0) < 0.001
+    
+    def test_imbalance_ratio(self, imbalanced_df):
+        """Test that imbalance ratio is calculated correctly."""
+        result = check_class_distribution(imbalanced_df, verbose=False)
+        
+        # 80 / 5 = 16
+        assert result['imbalance_ratio'] == 16.0
+    
+    def test_custom_threshold(self, imbalanced_df):
+        """Test custom imbalance threshold."""
+        # With 20% threshold, 普通 (15%) should also be minority
+        result = check_class_distribution(imbalanced_df, verbose=False, imbalance_threshold=0.20)
+        
+        assert '普通' in result['minority_classes']
+        assert '對敏感族群不健康' in result['minority_classes']
+    
+    def test_missing_column_error(self, balanced_df):
+        """Test that missing target column raises ValueError."""
+        with pytest.raises(ValueError, match="Column 'nonexistent' not found"):
+            check_class_distribution(balanced_df, target_col='nonexistent', verbose=False)
 
 
 # ============================================================================

@@ -110,23 +110,32 @@
     - 重新產生訓練資料：`train_2017_2022.parquet`, `val_2023_h1.parquet`, `test_2023_h2.parquet`
     - 驗證資料：確認包含 `season_spring` 等欄位且數值正確 (0/1)
 
-### [ ] **Task ID**: FR-001-D
-- **Task Name**: 類別不平衡檢查
+### [x] **Task ID**: FR-001-D
+- **Task Name**: 類別不平衡檢查（觀察與記錄）
 - **Work Description**:
     - Why: aqi_level 三類別可能分佈不均（如良好佔60%，不健康佔5%）
-    - How: 訓練前檢查類別分佈，考慮使用 class_weight='balanced' 或 SMOTE
+    - **Phase 1 職責**：觀察並記錄類別分佈（不刪除資料，這是真實現象）
+    - **Phase 3/4 職責**：訓練時使用 `class_weight='balanced'` 或 SMOTE 處理不平衡
 - **Resources Required**:
-    - Materials: `sklearn.utils.class_weight`, `imbalanced-learn` (可選)
+    - Materials: `pandas.value_counts()`
     - Personnel: 潘驄杰
 - **Deliverables**:
-    - [ ] 新增 `check_class_distribution()` 函式
-    - [ ] 在分類任務中輸出類別分佈報告
+    - [x] 新增 `check_class_distribution()` 函式（僅觀察用）
+    - [x] 輸出類別分佈報告：數量、百分比、是否不平衡
 - **Testing Plan**:
-    - 確認訓練/驗證/測試集類別分佈一致
+    - 確認訓練/驗證/測試集類別分佈一致 ✅
+    - 單元測試驗證函式輸出格式 ✅ (9 passed)
 - **Dependencies**: FR-001
-- **Constraints**: 對分類任務（決策樹、隨機森林）影響較大
-- **Completion Status**: 未開始
+- **Constraints**: 此 Task 只做觀察，不做處理（處理在 FR-003/FR-004）
+- **Completion Status**: ✅ 已完成 (2026/01/01)
 - **Priority**: P2
+- **Complete Summary**:
+    - 新增 `check_class_distribution()` 函式，輸出視覺化分佈報告
+    - **訓練集** (2017-2022): 良好 47.9% / 普通 40.1% / 不健康 12.0% → ✅ 平衡
+    - **測試集** (2023 H2): 良好 69.7% / 普通 27.7% / 不健康 **2.6%** → ⚠️ 嚴重不平衡
+    - 不平衡比例：26.9:1 (良好 vs 對敏感族群不健康)
+    - **結論**: Phase 3/4 必須使用 `class_weight='balanced'` 處理測試集不平衡問題
+    - 新增 9 個單元測試 (`TestCheckClassDistribution` 類別)
 
 ### [ ] **Task ID**: FR-001-E
 - **Task Name**: 特徵標準化選項
@@ -171,6 +180,7 @@
     - 評估驗證: R² > 0.5 表示模型有效
 - **Dependencies**: FR-001 (數據準備)
 - **Constraints**: 需確保係數可解釋（β₁ 對應風速影響量）
+- **Class Imbalance**: 不適用（回歸任務預測連續數值 AQI，無類別概念）
 - **Completion Status**: 未開始
 - **Notes**: 課程來源 AIp09，重點產出為係數表與預測 vs 實際散點圖
 
@@ -199,6 +209,7 @@
     - 評估驗證: Accuracy > 75%
 - **Dependencies**: FR-001 (數據準備)
 - **Constraints**: max_depth=5 限制深度，確保規則樹圖清晰可讀
+- **Class Imbalance**: 使用 `class_weight='balanced'` 處理類別不平衡（依 FR-001-D 觀察結果決定）
 - **Completion Status**: 未開始
 - **Notes**: 課程來源 AIp10，決策樹圖為期末報告亮點
 
@@ -227,6 +238,7 @@
     - 評估驗證: Accuracy > 80% (預期高於決策樹)
 - **Dependencies**: FR-001 (數據準備), FR-003 (用於比較)
 - **Constraints**: n_estimators=100, max_depth=10
+- **Class Imbalance**: 使用 `class_weight='balanced'` 處理類別不平衡（依 FR-001-D 觀察結果決定）
 - **Completion Status**: 未開始
 - **Notes**: 課程來源 AIp10，特徵重要性用於驗證期中觀察
 

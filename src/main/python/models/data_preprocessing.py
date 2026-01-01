@@ -18,7 +18,7 @@ Date: 2026-01-01
 
 import pandas as pd
 import numpy as np
-from typing import Tuple, Optional, List
+from typing import Tuple, Optional, List, Dict, Any
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 import sys
@@ -219,6 +219,89 @@ def get_lag_feature_names(lag_cols: List[str] = None, lags: List[int] = None) ->
         lags = DEFAULT_LAGS
     
     return [f'{col}_lag{lag}' for col in lag_cols for lag in lags]
+
+
+# ============================================================================
+# Class Distribution Check (FR-001-D: Phase 1 觀察用)
+# ============================================================================
+
+def check_class_distribution(
+    df: pd.DataFrame,
+    target_col: str = 'aqi_level',
+    verbose: bool = True,
+    imbalance_threshold: float = 0.10
+) -> Dict[str, Any]:
+    """
+    檢查並報告類別分佈情況（Phase 1: 僅觀察，不做處理）。
+    
+    此函式用於診斷類別不平衡問題，實際處理在 Phase 3/4 模型訓練時進行
+    （使用 class_weight='balanced' 或 SMOTE）。
+    
+    Args:
+        df: DataFrame with target column
+        target_col: Name of target column (default: 'aqi_level')
+        verbose: Whether to print detailed report (default: True)
+        imbalance_threshold: Threshold below which a class is considered minority (default: 0.10 = 10%)
+        
+    Returns:
+        Dict with:
+        - 'counts': 各類別數量 (pd.Series)
+        - 'percentages': 各類別百分比 (pd.Series)
+        - 'is_imbalanced': 是否有嚴重不平衡（任一類別 < threshold）
+        - 'minority_classes': 少數類別列表（百分比 < threshold）
+        - 'majority_class': 多數類別名稱
+        - 'imbalance_ratio': 多數類別 / 少數類別的比例
+    """
+    if target_col not in df.columns:
+        raise ValueError(f"Column '{target_col}' not found in DataFrame")
+    
+    # Calculate distribution
+    counts = df[target_col].value_counts()
+    percentages = df[target_col].value_counts(normalize=True)
+    
+    # Detect imbalance
+    minority_classes = percentages[percentages < imbalance_threshold].index.tolist()
+    majority_class = counts.idxmax()
+    minority_class = counts.idxmin()
+    imbalance_ratio = counts[majority_class] / counts[minority_class] if counts[minority_class] > 0 else float('inf')
+    
+    is_imbalanced = len(minority_classes) > 0
+    
+    result = {
+        'counts': counts,
+        'percentages': percentages,
+        'is_imbalanced': is_imbalanced,
+        'minority_classes': minority_classes,
+        'majority_class': majority_class,
+        'imbalance_ratio': imbalance_ratio
+    }
+    
+    # Print report
+    if verbose:
+        print("\n" + "=" * 50)
+        print(f"📊 Class Distribution Report: '{target_col}'")
+        print("=" * 50)
+        print(f"Total samples: {len(df):,}")
+        print()
+        print("Class Distribution:")
+        for cls in counts.index:
+            pct = percentages[cls] * 100
+            bar = "█" * int(pct / 2)  # Visual bar (50 chars max)
+            marker = " ⚠️ MINORITY" if cls in minority_classes else ""
+            print(f"  {cls:20s}: {counts[cls]:>8,} ({pct:5.1f}%) {bar}{marker}")
+        print()
+        
+        if is_imbalanced:
+            print(f"⚠️  WARNING: Class imbalance detected!")
+            print(f"   Minority classes (< {imbalance_threshold*100:.0f}%): {minority_classes}")
+            print(f"   Imbalance ratio: {imbalance_ratio:.1f}:1 ({majority_class} vs {minority_class})")
+            print(f"   💡 Recommendation: Use class_weight='balanced' in Phase 3/4")
+        else:
+            print("✅ No severe class imbalance detected.")
+        
+        print("=" * 50 + "\n")
+    
+    return result
 
 
 # ============================================================================
