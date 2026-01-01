@@ -31,6 +31,9 @@ from data_preprocessing import (
     encode_season_onehot,
     check_class_distribution,
     standardize_features,
+    clean_sentinel_values,
+    encode_cyclical_features,
+    encode_county_onehot,
 )
 
 
@@ -662,6 +665,218 @@ class TestStandardizeFeatures:
         
         # month 欄位應保持原值
         np.testing.assert_array_equal(X_train_s['month'].values, original_month)
+
+
+# ============================================================================
+# Test: clean_sentinel_values() (FR-001-F)
+# ============================================================================
+
+class TestCleanSentinelValues:
+    """Tests for sentinel value cleaning function (FR-001-F)."""
+    
+    @pytest.fixture
+    def df_with_sentinels(self):
+        """Create DataFrame with -999 sentinel values."""
+        return pd.DataFrame({
+            'date': pd.date_range('2023-01-01', periods=10, freq='h'),
+            'county': ['台北'] * 10,
+            'pm2.5': [10, -999, 30, 40, 50, -999, 70, 80, 90, 100],
+            'pm10': [20, 30, 40, 50, 60, 70, 80, 90, 100, 110],
+            'o3': [5, 10, -999, 20, 25, 30, 35, 40, 45, 50],
+        })
+    
+    def test_sentinels_replaced_with_nan(self, df_with_sentinels):
+        """Test that -999 values are replaced with NaN."""
+        result = clean_sentinel_values(df_with_sentinels)
+        
+        # Should not contain -999 anymore
+        assert (result['pm2.5'] == -999).sum() == 0
+        assert (result['o3'] == -999).sum() == 0
+    
+    def test_interpolation_applied(self, df_with_sentinels):
+        """Test that linear interpolation fills in sentinel values."""
+        result = clean_sentinel_values(df_with_sentinels)
+        
+        # After interpolation, most NaNs should be filled
+        # Index 1 pm2.5: should be interpolated between 10 and 30 = 20
+        assert abs(result.iloc[1]['pm2.5'] - 20) < 1
+    
+    def test_no_negative_after_clean(self, df_with_sentinels):
+        """Test that no negative values remain after cleaning."""
+        result = clean_sentinel_values(df_with_sentinels)
+        
+        # All values should be >= 0 (or NaN if interpolation couldn't fill)
+        for col in ['pm2.5', 'pm10', 'o3']:
+            non_nan = result[col].dropna()
+            assert (non_nan >= 0).all(), f"Negative values found in {col}"
+    
+    def test_original_df_not_modified(self, df_with_sentinels):
+        """Test that original DataFrame is not modified."""
+        original_pm25 = df_with_sentinels['pm2.5'].values.copy()
+        clean_sentinel_values(df_with_sentinels)
+        
+        np.testing.assert_array_equal(df_with_sentinels['pm2.5'].values, original_pm25)
+
+
+# ============================================================================
+# Test: encode_cyclical_features() (FR-001-H)
+# ============================================================================
+
+class TestEncodeCyclicalFeatures:
+    """Tests for cyclical encoding function (FR-001-H)."""
+    
+    @pytest.fixture
+    def time_df(self):
+        """Create DataFrame with hour and month columns."""
+        return pd.DataFrame({
+            'hour': [0, 6, 12, 18, 23],
+            'month': [1, 4, 7, 10, 12],
+        })
+    
+    def test_cyclical_columns_created(self, time_df):
+        """Test that sin/cos columns are created for hour and month."""
+        result = encode_cyclical_features(time_df)
+        
+        expected_cols = ['hour_sin', 'hour_cos', 'month_sin', 'month_cos']
+        for col in expected_cols:
+            assert col in result.columns, f"Missing column: {col}"
+    
+    def test_values_in_range(self, time_df):
+        """Test that sin/cos values are in [-1, 1] range."""
+        result = encode_cyclical_features(time_df)
+        
+        for col in ['hour_sin', 'hour_cos', 'month_sin', 'month_cos']:
+            assert result[col].min() >= -1.0
+            assert result[col].max() <= 1.0
+    
+    def test_hour_midnight_values(self, time_df):
+        """Test that hour=0 has correct sin/cos values."""
+        result = encode_cyclical_features(time_df)
+        
+        # At hour=0: sin(0) = 0, cos(0) = 1
+        midnight = result[result['hour'] == 0].iloc[0]
+        assert abs(midnight['hour_sin']) < 0.01
+        assert abs(midnight['hour_cos'] - 1.0) < 0.01
+    
+    def test_hour_noon_values(self, time_df):
+        """Test that hour=12 has correct sin/cos values."""
+        result = encode_cyclical_features(time_df)
+        
+        # At hour=12: sin(π) = 0, cos(π) = -1
+        noon = result[result['hour'] == 12].iloc[0]
+        assert abs(noon['hour_sin']) < 0.01
+        assert abs(noon['hour_cos'] + 1.0) < 0.01
+    
+    def test_hour_23_close_to_0(self, time_df):
+        """Test that hour=23 values are close to hour=0 values."""
+        result = encode_cyclical_features(time_df)
+        
+        h0 = result[result['hour'] == 0].iloc[0]
+        h23 = result[result['hour'] == 23].iloc[0]
+        
+        # sin/cos values should be close (within 0.3)
+        assert abs(h0['hour_sin'] - h23['hour_sin']) < 0.3
+        assert abs(h0['hour_cos'] - h23['hour_cos']) < 0.1
+
+
+# ============================================================================
+# Test: encode_county_onehot() (FR-001-I)
+# ============================================================================
+
+class TestEncodeCountyOneHot:
+    """Tests for county one-hot encoding function (FR-001-I)."""
+    
+    @pytest.fixture
+    def county_df(self):
+        """Create DataFrame with county column."""
+        return pd.DataFrame({
+            'county': ['New Taipei City', 'Changhua County', 'Kaohsiung City',
+                       'New Taipei City', 'Changhua County'],
+            'aqi': [50, 60, 70, 45, 55]
+        })
+    
+    def test_onehot_columns_created(self, county_df):
+        """Test that 3 binary columns are created."""
+        result = encode_county_onehot(county_df)
+        
+        expected_cols = ['county_new_taipei', 'county_changhua', 'county_kaohsiung']
+        for col in expected_cols:
+            assert col in result.columns, f"Missing column: {col}"
+    
+    def test_onehot_values_binary(self, county_df):
+        """Test that values are 0 or 1."""
+        result = encode_county_onehot(county_df)
+        
+        for col in ['county_new_taipei', 'county_changhua', 'county_kaohsiung']:
+            unique_vals = set(result[col].unique())
+            assert unique_vals.issubset({0, 1})
+    
+    def test_exactly_one_active(self, county_df):
+        """Test that each row has exactly one county = 1."""
+        result = encode_county_onehot(county_df)
+        
+        county_cols = ['county_new_taipei', 'county_changhua', 'county_kaohsiung']
+        assert (result[county_cols].sum(axis=1) == 1).all()
+    
+    def test_correct_mapping(self, county_df):
+        """Test that encoding matches the county name."""
+        result = encode_county_onehot(county_df)
+        
+        # First row is New Taipei City
+        assert result.iloc[0]['county_new_taipei'] == 1
+        assert result.iloc[0]['county_changhua'] == 0
+        assert result.iloc[0]['county_kaohsiung'] == 0
+        
+        # Third row is Kaohsiung City
+        assert result.iloc[2]['county_kaohsiung'] == 1
+
+
+# ============================================================================
+# Test: Lag24 Features (FR-001-G)
+# ============================================================================
+
+class TestLag24Features:
+    """Tests for lag24 feature creation (FR-001-G)."""
+    
+    @pytest.fixture
+    def hourly_df(self):
+        """Create DataFrame with 48 hours of data (2 days)."""
+        dates = pd.date_range('2023-01-01', periods=48, freq='h')
+        return pd.DataFrame({
+            'date': dates,
+            'county': ['台北'] * 48,
+            'pm2.5': list(range(48)),  # 0-47
+            'pm10': list(range(10, 58)),
+            'o3': list(range(5, 53)),
+        })
+    
+    def test_lag24_columns_created(self, hourly_df):
+        """Test that lag24 columns are created."""
+        result = create_lag_features(hourly_df, lags=[1, 24], drop_na=False)
+        
+        assert 'pm2.5_lag24' in result.columns
+        assert 'pm10_lag24' in result.columns
+        assert 'o3_lag24' in result.columns
+    
+    def test_lag24_correct_shift(self, hourly_df):
+        """Test that lag24 equals value from 24 hours ago."""
+        result = create_lag_features(hourly_df, lag_cols=['pm2.5'], lags=[24], drop_na=False)
+        result = result.sort_values('date').reset_index(drop=True)
+        
+        # Row 24 should have lag24 = value at row 0
+        assert result.loc[24, 'pm2.5_lag24'] == 0
+        # Row 25 should have lag24 = value at row 1
+        assert result.loc[25, 'pm2.5_lag24'] == 1
+    
+    def test_lag24_first_24_are_nan(self, hourly_df):
+        """Test that first 24 rows have NaN for lag24."""
+        result = create_lag_features(hourly_df, lag_cols=['pm2.5'], lags=[24], drop_na=False)
+        result = result.sort_values('date').reset_index(drop=True)
+        
+        # First 24 rows should have NaN
+        assert result.loc[0:23, 'pm2.5_lag24'].isna().all()
+        # Row 24 and after should not be NaN
+        assert result.loc[24:, 'pm2.5_lag24'].notna().all()
 
 
 # ============================================================================

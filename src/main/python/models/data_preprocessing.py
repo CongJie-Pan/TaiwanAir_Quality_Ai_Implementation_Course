@@ -127,7 +127,85 @@ def add_wind_level(df: pd.DataFrame, wind_col: str = 'windspeed') -> pd.DataFram
 
 # 預設使用的污染物欄位及滯後步數
 DEFAULT_LAG_COLS = ['pm2.5', 'pm10', 'o3']
-DEFAULT_LAGS = [1]  # 只用 lag1 (前一小時)
+DEFAULT_LAGS = [1, 24]  # lag1 (前一小時) + lag24 (前一天同時刻，捕捉日週期)
+
+
+def clean_sentinel_values(
+    df: pd.DataFrame,
+    cols: List[str] = None,
+    sentinel_value: float = -999.0,
+    group_col: str = 'county',
+    interpolation_limit: int = 6
+) -> pd.DataFrame:
+    """
+    Clean sentinel values (-999) in pollutant columns using linear interpolation.
+    
+    FR-001-F: 修復污染物哨兵值 Bug
+    
+    ⚠️ 重要：
+    - 此函式必須在 create_lag_features() 之前呼叫
+    - -999 是原始資料中的哨兵值，代表無效/缺失資料
+    - 使用線性插值填補，按縣市分組避免跨區域插值
+    
+    Args:
+        df: DataFrame with pollutant columns
+        cols: Columns to clean (default: pm2.5, pm10, o3)
+        sentinel_value: Value to treat as missing (default: -999)
+        group_col: Column to group by for interpolation
+        interpolation_limit: Max consecutive NaNs to interpolate (default: 6 hours)
+        
+    Returns:
+        DataFrame with sentinel values replaced and interpolated
+        
+    Example:
+        >>> df = clean_sentinel_values(df)
+        >>> # Now safe to create lag features
+        >>> df = create_lag_features(df)
+    """
+    if cols is None:
+        cols = DEFAULT_LAG_COLS
+    
+    df = df.copy()
+    
+    # 統計清理前的情況
+    total_sentinel = 0
+    for col in cols:
+        if col in df.columns:
+            sentinel_count = (df[col] == sentinel_value).sum()
+            if sentinel_count > 0:
+                total_sentinel += sentinel_count
+                print(f"  Found {sentinel_count:,} sentinel values ({sentinel_value}) in '{col}'")
+    
+    if total_sentinel == 0:
+        print("  No sentinel values found, skipping cleanup.")
+        return df
+    
+    # Step 1: 將哨兵值轉為 NaN
+    for col in cols:
+        if col in df.columns:
+            df.loc[df[col] == sentinel_value, col] = np.nan
+    
+    # Step 2: 按縣市分組進行線性插值
+    # 確保資料按時間排序
+    if 'date' in df.columns:
+        df = df.sort_values([group_col, 'date']).reset_index(drop=True)
+    
+    # 對每個污染物欄位進行插值
+    existing_cols = [col for col in cols if col in df.columns]
+    
+    for col in existing_cols:
+        # 按 group 分組插值，避免不同縣市的資料混在一起
+        df[col] = df.groupby(group_col)[col].transform(
+            lambda x: x.interpolate(method='linear', limit=interpolation_limit)
+        )
+    
+    # 統計清理後仍有 NaN 的數量（超過 limit 的連續缺失）
+    remaining_nan = df[existing_cols].isna().sum().sum()
+    print(f"  Cleaned {total_sentinel:,} sentinel values via linear interpolation")
+    if remaining_nan > 0:
+        print(f"  Remaining NaN after interpolation: {remaining_nan:,} (will be dropped later)")
+    
+    return df
 
 
 def create_lag_features(
@@ -317,15 +395,22 @@ MODEL_COLS = [
     'aqi',            # 回歸目標
     'aqi_level',      # 分類目標
     'windspeed',      # 特徵
-    'month', 'hour',  # 時間特徵
+    'month', 'hour',  # 時間特徵 (原始值供參考)
+    # Cyclical Encoding for time features (FR-001-H)
+    'hour_sin', 'hour_cos', 'month_sin', 'month_cos',
     'season',         # 原始季節 (供參考)
-    # One-Hot Encoded Seasons (取代 season_encoded)
+    # One-Hot Encoded Seasons (FR-001-C)
     'season_spring', 'season_summer', 'season_autumn', 'season_winter',
-    'county_encoded',                 # 空間
+    # County Encoding
+    'county_encoded',                 # Label Encoding (保留給樹模型)
+    'county_new_taipei', 'county_changhua', 'county_kaohsiung',  # One-Hot (FR-001-I)
     'wind_level', 'wind_level_encoded',  # 風速等級
     # Lag Features (避免 Data Leakage)
     'pm2.5', 'pm10', 'o3',           # 原始污染物（供產生 lag 用）
-    'pm2.5_lag1', 'pm10_lag1', 'o3_lag1',  # 滯後特徵
+    # Lag1 (前一小時)
+    'pm2.5_lag1', 'pm10_lag1', 'o3_lag1',
+    # Lag24 (前一天同時刻，捕捉日週期) (FR-001-G)
+    'pm2.5_lag24', 'pm10_lag24', 'o3_lag24',
 ]
 
 
@@ -440,24 +525,35 @@ def save_multiyear_splits(
     print("=" * 60)
     
     # Load and process training data
-    print(f"\n[1/4] Loading training data ({train_years[0]}-{train_years[-1]})...")
+    print(f"\n[1/5] Loading training data ({train_years[0]}-{train_years[-1]})...")
     df_train = load_multi_year_data(years=train_years, counties=counties)
     df_train = apply_feature_engineering(df_train)
     
+    # FR-001-F: Clean sentinel values before creating lag features
+    print(f"\n[2/5] Cleaning sentinel values (-999)...")
+    df_train = clean_sentinel_values(df_train)
+    
     # Create lag features (避免 Data Leakage)
-    print(f"\n[2/4] Creating lag features...")
+    print(f"\n[3/5] Creating lag features (lag1 + lag24)...")
     df_train = create_lag_features(df_train)
     
     required = ['aqi', 'aqi_level', 'windspeed', 'month', 'date', 'season']
     df_train = clean_data(df_train, required)
     df_train, encoders = encode_categorical_features(df_train)
-    # One-Hot Encoding for season
+    
+    # One-Hot Encoding for season (FR-001-C)
     df_train = encode_season_onehot(df_train)
+    # Cyclical Encoding for hour/month (FR-001-H)
+    df_train = encode_cyclical_features(df_train)
+    # One-Hot Encoding for county (FR-001-I)
+    df_train = encode_county_onehot(df_train)
     
     # Load and process test year data
-    print(f"\n[3/4] Loading test year data ({test_year})...")
+    print(f"\n[4/5] Loading test year data ({test_year})...")
     df_test_year = load_training_data(year=test_year, counties=counties)
     df_test_year = apply_feature_engineering(df_test_year)
+    # FR-001-F: Clean sentinel values before creating lag features
+    df_test_year = clean_sentinel_values(df_test_year)
     df_test_year = create_lag_features(df_test_year)
     df_test_year = clean_data(df_test_year, required)
     
@@ -468,8 +564,12 @@ def save_multiyear_splits(
                 lambda x: le.transform([x])[0] if x in le.classes_ else -1
             )
             
-    # One-Hot Encoding for season
+    # One-Hot Encoding for season (FR-001-C)
     df_test_year = encode_season_onehot(df_test_year)
+    # Cyclical Encoding for hour/month (FR-001-H)
+    df_test_year = encode_cyclical_features(df_test_year)
+    # One-Hot Encoding for county (FR-001-I)
+    df_test_year = encode_county_onehot(df_test_year)
     
     # Sort and split test year
     df_test_year = df_test_year.sort_values('date').reset_index(drop=True)
@@ -484,7 +584,7 @@ def save_multiyear_splits(
     df_test = df_test[available_cols]
     
     # Save files
-    print(f"\n[4/4] Saving splits...")
+    print(f"\n[5/5] Saving splits...")
     results = {}
     
     # Train
@@ -749,6 +849,89 @@ def encode_season_onehot(df: pd.DataFrame) -> pd.DataFrame:
         # Create binary column (1 if match, 0 if not)
         df[f'season_{en_suffix}'] = (df['season'] == ch_name).astype(int)
         
+    return df
+
+
+def encode_cyclical_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Encode hour and month as cyclical features using sin/cos transformation.
+    
+    FR-001-H: 時間特徵週期編碼
+    
+    為什麼需要週期編碼：
+    - 整數編碼無法表達週期性（23點和0點其實很近，但數值差23）
+    - sin/cos 轉換將週期性嵌入特徵空間
+    
+    公式：
+    - hour_sin = sin(2π × hour / 24)
+    - hour_cos = cos(2π × hour / 24)
+    - month_sin = sin(2π × (month - 1) / 12)
+    - month_cos = cos(2π × (month - 1) / 12)
+    
+    Args:
+        df: DataFrame with 'hour' and 'month' columns
+        
+    Returns:
+        DataFrame with cyclical encoding columns added
+    """
+    df = df.copy()
+    
+    # Hour cyclical encoding (24-hour cycle)
+    if 'hour' in df.columns:
+        df['hour_sin'] = np.sin(2 * np.pi * df['hour'] / 24)
+        df['hour_cos'] = np.cos(2 * np.pi * df['hour'] / 24)
+    else:
+        print("Warning: 'hour' column not found, skipping cyclical encoding.")
+    
+    # Month cyclical encoding (12-month cycle)
+    if 'month' in df.columns:
+        # month - 1 to make January (1) map correctly
+        df['month_sin'] = np.sin(2 * np.pi * (df['month'] - 1) / 12)
+        df['month_cos'] = np.cos(2 * np.pi * (df['month'] - 1) / 12)
+    else:
+        print("Warning: 'month' column not found, skipping cyclical encoding.")
+    
+    return df
+
+
+def encode_county_onehot(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    One-Hot encode county column.
+    
+    FR-001-I: 縣市 One-Hot Encoding
+    
+    為什麼需要 One-Hot：
+    - Label Encoding (0,1,2) 隱含「新北<彰化<高雄」的大小關係
+    - 線性迴歸會被這個假的順序誤導
+    - 決策樹可用 Label Encoding，但 One-Hot 更通用
+    
+    Creates 3 binary columns:
+    - county_new_taipei
+    - county_changhua
+    - county_kaohsiung
+    
+    Args:
+        df: DataFrame with 'county' column
+        
+    Returns:
+        DataFrame with one-hot encoded county columns added
+    """
+    df = df.copy()
+    
+    if 'county' not in df.columns:
+        print("Warning: 'county' column not found, skipping one-hot encoding.")
+        return df
+    
+    # Map English county names to column suffixes
+    county_map = {
+        'New Taipei City': 'new_taipei',
+        'Changhua County': 'changhua',
+        'Kaohsiung City': 'kaohsiung'
+    }
+    
+    for county_name, suffix in county_map.items():
+        df[f'county_{suffix}'] = (df['county'] == county_name).astype(int)
+    
     return df
 
 

@@ -163,6 +163,113 @@
     - 回傳 8 元素 tuple，新增 `scaler` 物件供後續使用
     - 新增 6 個單元測試 (`TestStandardizeFeatures` 類別)
 
+### [x] **Task ID**: FR-001-F
+- **Task Name**: 修復污染物哨兵值 (-999 Bug)
+- **Work Description**:
+    - Why: Lag features 中仍有 `-999` 哨兵值（代表無效資料），會破壞模型訓練
+    - Problem: 線性迴歸會將 -999 視為極小值導致權重劇烈偏移；樹模型會浪費分支處理無意義的數值
+    - How: 在產生 lag 前，將 `-999` 轉為 `NaN` 並使用線性插值填補
+- **Resources Required**:
+    - Materials: `pandas.DataFrame.interpolate()`, `numpy`
+    - Personnel: 潘驄杰
+- **Deliverables**:
+    - [x] 新增 `clean_sentinel_values()` 函式，處理污染物欄位的 -999
+    - [x] 使用線性插值 (`method='linear'`) 填補 NaN，按縣市分組處理
+    - [x] 設定插值限制 (`limit=6`)，避免長時間缺失被強制填補
+    - [x] 修改 `save_multiyear_splits()` 加入清洗步驟
+    - [x] 重新產生 parquet 資料檔
+- **Testing Plan**:
+    - 驗證 pm2.5_lag1, o3_lag1 最小值 >= 0 ✅
+    - 驗證插值後 NaN 數量減少 ✅
+- **Dependencies**: FR-001
+- **Constraints**: 插值只能使用過去資料，避免資料洩漏
+- **Completion Status**: ✅ 已完成 (2026/01/01)
+- **Priority**: P0 (🚨 紅色警戒)
+- **Source**: Perplexity AI Expert Evaluation (2026/01/01)
+- **Complete Summary**:
+    - 新增 `clean_sentinel_values()` 函式於 `data_preprocessing.py`
+    - 使用 `df.groupby(group_col)[col].transform(lambda x: x.interpolate())` 按縣市分組插值
+    - 驗證結果：`pm2.5_lag1` 最小值從 -999 修正為 **0.0** ✅
+    - 訓練集筆數從 1,365,839 增加至 1,492,716（插值保留更多資料）
+    - 新增 4 個單元測試 (`TestCleanSentinelValues` 類別)
+
+### [x] **Task ID**: FR-001-G
+- **Task Name**: 新增 Lag24 特徵（日週期）
+- **Work Description**:
+    - Why: 空氣品質有強烈的日週期性（Diurnal Cycle），早晚高峰交通排放、白天光化學反應
+    - How: 產生 `pm2.5_lag24`, `pm10_lag24`, `o3_lag24` 捕捉前一天同時刻的污染狀況
+- **Resources Required**:
+    - Materials: `pandas.DataFrame.shift(24)`
+    - Personnel: 潘驄杰
+- **Deliverables**:
+    - [x] 修改 `DEFAULT_LAGS` 加入 `[1, 24]`
+    - [x] 更新 `MODEL_COLS` 加入 lag24 欄位
+    - [x] 重新產生 parquet 資料檔
+- **Testing Plan**:
+    - 驗證 lag24 特徵正確偏移（$t$ 列的 `pm2.5_lag24` 等於 $t-24$ 列的 `pm2.5`）✅
+- **Dependencies**: FR-001-F (需先清理哨兵值)
+- **Constraints**: Lag24 會產生更多 NaN（前 24 筆），需評估資料損失
+- **Completion Status**: ✅ 已完成 (2026/01/01)
+- **Priority**: P1
+- **Complete Summary**:
+    - 修改 `DEFAULT_LAGS = [1, 24]`，同時產生 lag1 和 lag24
+    - 新增 3 個 lag24 欄位：`pm2.5_lag24`, `pm10_lag24`, `o3_lag24`
+    - 資料欄位從 21 增加至 31（含其他新特徵）
+    - 新增 3 個單元測試 (`TestLag24Features` 類別)
+
+### [x] **Task ID**: FR-001-H
+- **Task Name**: 時間特徵週期編碼（Cyclical Encoding）
+- **Work Description**:
+    - Why: 整數編碼的 hour/month 無法表達週期性（23點和0點其實很近，但數值差23）
+    - How: 使用 sin/cos 轉換，將週期性嵌入特徵空間
+    - Formula: $hour_{sin} = \sin(2\pi \times hour / 24)$, $hour_{cos} = \cos(2\pi \times hour / 24)$
+- **Resources Required**:
+    - Materials: `numpy.sin`, `numpy.cos`
+    - Personnel: 潘驄杰
+- **Deliverables**:
+    - [x] 新增 `encode_cyclical_features()` 函式
+    - [x] 產生 `hour_sin`, `hour_cos`, `month_sin`, `month_cos` 欄位
+    - [x] 更新 `MODEL_COLS` 加入週期編碼欄位
+    - [x] 重新產生 parquet 資料檔
+- **Testing Plan**:
+    - 驗證 sin/cos 值在 [-1, 1] 範圍內 ✅
+    - 驗證 hour=0 和 hour=23 的 sin/cos 值接近 ✅
+- **Dependencies**: FR-001
+- **Constraints**: 原始 hour/month 欄位保留（供參考）
+- **Completion Status**: ✅ 已完成 (2026/01/01)
+- **Priority**: P1
+- **Complete Summary**:
+    - 新增 `encode_cyclical_features()` 函式於 `data_preprocessing.py`
+    - 使用 `np.sin(2 * np.pi * hour / 24)` 產生週期特徵
+    - 新增 4 個欄位：`hour_sin`, `hour_cos`, `month_sin`, `month_cos`
+    - 新增 5 個單元測試 (`TestEncodeCyclicalFeatures` 類別)
+
+### [x] **Task ID**: FR-001-I
+- **Task Name**: 縣市 One-Hot Encoding
+- **Work Description**:
+    - Why: Label Encoding (0,1,2) 隱含「新北<彰化<高雄」的大小關係，線性迴歸會被誤導
+    - How: 改用 One-Hot Encoding，產生 3 個二元欄位 (或 2 個，避免共線性)
+- **Resources Required**:
+    - Materials: `pandas.get_dummies()` 或手動建立
+    - Personnel: 潘驄杰
+- **Deliverables**:
+    - [x] 新增 `encode_county_onehot()` 函式
+    - [x] 產生 `county_new_taipei`, `county_changhua`, `county_kaohsiung` 欄位
+    - [x] 更新 `MODEL_COLS` 加入縣市 One-Hot 欄位
+    - [x] 線性迴歸使用時可 drop_first=True 避免共線性
+- **Testing Plan**:
+    - 驗證每列只有一個 county_* 欄位為 1 ✅
+- **Dependencies**: FR-001
+- **Constraints**: 決策樹可用 Label Encoding，線性迴歸必須 One-Hot
+- **Completion Status**: ✅ 已完成 (2026/01/01)
+- **Priority**: P1
+- **Complete Summary**:
+    - 新增 `encode_county_onehot()` 函式於 `data_preprocessing.py`
+    - 產生 3 個二元欄位：`county_new_taipei`, `county_changhua`, `county_kaohsiung`
+    - 保留原本的 `county_encoded` (Label Encoding) 供樹模型使用
+    - 新增 4 個單元測試 (`TestEncodeCountyOneHot` 類別)
+
+
 ---
 
 ## Phase 2: 線性回歸模型實作
