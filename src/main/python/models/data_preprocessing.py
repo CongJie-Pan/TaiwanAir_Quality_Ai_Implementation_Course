@@ -127,45 +127,70 @@ def add_wind_level(df: pd.DataFrame, wind_col: str = 'windspeed') -> pd.DataFram
 
 CLEANED_DATA_DIR = PROJECT_ROOT / 'data' / 'processed' / 'model_used' / 'cleaned'
 
+# 模型訓練需要的欄位 (精簡版)
+MODEL_COLS = [
+    'date',           # 時間戳（參考用）
+    'county',         # 原始縣市名
+    'aqi',            # 回歸目標
+    'aqi_level',      # 分類目標
+    'windspeed',      # 特徵
+    'month', 'hour',  # 時間特徵
+    'season', 'season_encoded',      # 季節
+    'county_encoded',                 # 空間
+    'wind_level', 'wind_level_encoded'  # 風速等級
+]
 
-def save_cleaned_data(
-    df: pd.DataFrame,
-    filename: str = 'cleaned_2023.parquet',
-    include_splits: bool = False
-) -> Path:
+
+def save_cleaned_data(df: pd.DataFrame, year: int = 2023) -> dict:
     """
-    Save cleaned and feature-engineered data to parquet file.
+    Save cleaned data to two parquet files:
+    1. cleaned_{year}_full.parquet - 保留所有欄位（供分析用）
+    2. cleaned_{year}_model.parquet - 只保留模型需要的欄位（供訓練用）
     
     儲存位置: data/processed/model_used/cleaned/
     
     Args:
         df: Cleaned DataFrame to save
-        filename: Output filename (default: cleaned_2023.parquet)
-        include_splits: If True, also save train/val/test splits
+        year: Data year (default: 2023)
         
     Returns:
-        Path to saved file
+        Dict with paths to both saved files
     """
     # Create directory if not exists
     CLEANED_DATA_DIR.mkdir(parents=True, exist_ok=True)
     
-    output_path = CLEANED_DATA_DIR / filename
-    df.to_parquet(output_path, index=False, compression='snappy')
+    results = {}
     
-    file_size_mb = output_path.stat().st_size / (1024 * 1024)
-    print(f"✅ Saved cleaned data to: {output_path}")
-    print(f"   File size: {file_size_mb:.2f} MB")
-    print(f"   Rows: {len(df):,}")
+    # 1. Save full version (all columns)
+    full_path = CLEANED_DATA_DIR / f'cleaned_{year}_full.parquet'
+    df.to_parquet(full_path, index=False, compression='snappy')
+    full_size_mb = full_path.stat().st_size / (1024 * 1024)
+    results['full'] = full_path
     
-    return output_path
+    print(f"✅ Saved FULL version: {full_path}")
+    print(f"   File size: {full_size_mb:.2f} MB | Columns: {len(df.columns)} | Rows: {len(df):,}")
+    
+    # 2. Save model version (only essential columns)
+    available_cols = [col for col in MODEL_COLS if col in df.columns]
+    df_model = df[available_cols]
+    
+    model_path = CLEANED_DATA_DIR / f'cleaned_{year}_model.parquet'
+    df_model.to_parquet(model_path, index=False, compression='snappy')
+    model_size_mb = model_path.stat().st_size / (1024 * 1024)
+    results['model'] = model_path
+    
+    print(f"✅ Saved MODEL version: {model_path}")
+    print(f"   File size: {model_size_mb:.2f} MB | Columns: {len(df_model.columns)} | Rows: {len(df_model):,}")
+    
+    return results
 
 
-def load_cleaned_data(filename: str = 'cleaned_2023.parquet') -> pd.DataFrame:
+def load_cleaned_data(filename: str = 'cleaned_2023_model.parquet') -> pd.DataFrame:
     """
     Load previously saved cleaned data.
     
     Args:
-        filename: Filename to load
+        filename: Filename to load (default: model version)
         
     Returns:
         Cleaned DataFrame
@@ -183,13 +208,14 @@ def load_cleaned_data(filename: str = 'cleaned_2023.parquet') -> pd.DataFrame:
     
     df = pd.read_parquet(file_path)
     print(f"✅ Loaded cleaned data from: {file_path}")
-    print(f"   Rows: {len(df):,}")
+    print(f"   Rows: {len(df):,} | Columns: {len(df.columns)}")
     
     return df
 
 
-def cleaned_data_exists(filename: str = 'cleaned_2023.parquet') -> bool:
+def cleaned_data_exists(year: int = 2023, version: str = 'model') -> bool:
     """Check if cleaned data file exists."""
+    filename = f'cleaned_{year}_{version}.parquet'
     return (CLEANED_DATA_DIR / filename).exists()
 
 
@@ -496,8 +522,8 @@ if __name__ == "__main__":
         # Encode categorical features
         df, encoders = encode_categorical_features(df)
         
-        # Save to parquet
-        save_cleaned_data(df, 'cleaned_2023.parquet')
+        # Save to parquet (generates both full and model versions)
+        save_cleaned_data(df, year=2023)
     
     if args.test or (not args.save and not args.test):
         # Test classification data preparation

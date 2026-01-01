@@ -17,7 +17,7 @@
 ### 2.2.1 模型原理
 
 ```
-AQI = β₀ + β₁(windspeed) + β₂(季節) + β₃(PM2.5) + ... + ε
+AQI = β₀ + β₁(windspeed) + β₂(季節) + β₃(月份) + β₄(小時) + β₅(縣市) + ε
 ```
 
 最小化均方誤差 (MSE) 來求解係數 β。
@@ -27,7 +27,7 @@ AQI = β₀ + β₁(windspeed) + β₂(季節) + β₃(PM2.5) + ... + ε
 | 項目 | 規格 |
 |------|------|
 | **套件** | `sklearn.linear_model.LinearRegression` |
-| **輸入特徵** | windspeed, season, month, hour, pm2.5, pm10, o3 |
+| **輸入特徵** | windspeed, season, month, hour, county |
 | **目標變數** | aqi (連續值) |
 | **評估指標** | R², RMSE, MAE |
 
@@ -108,10 +108,10 @@ AQI = β₀ + β₁(windspeed) + β₂(季節) + β₃(PM2.5) + ... + ε
    ```
    Feature Importance:
    1. windspeed: 0.35
-   2. season: 0.25
-   3. pm2.5: 0.20
+   2. season: 0.28
+   3. month: 0.18
    4. hour: 0.12
-   5. county: 0.08
+   5. county: 0.07
    ```
 3. **OOB 分數**（Out-of-Bag Score）
 
