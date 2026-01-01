@@ -12,26 +12,35 @@
 
 ## Phase 1: 數據準備與特徵工程
 
-### [ ] **Task ID**: FR-001
+### [x] **Task ID**: FR-001
 - **Task Name**: 數據前處理與特徵工程
 - **Work Description**:
     - Why: 為三個 AI 模型準備乾淨且標準化的輸入數據
     - How: 載入 2023 年數據，產生季節、AQI 等級等衍生特徵，處理缺失值，分割訓練/測試集
 - **Resources Required**:
     - Materials: `pandas`, `numpy`, `sklearn.model_selection`
-    - Personnel: 開發者
+    - Personnel: 潘驄杰
     - Reference Codes/docs: `docs/finalReport/spec/01-problem-and-data.md`
 - **Deliverables**:
-    - [ ] 數據載入與清洗腳本完成
-    - [ ] 特徵工程函式 (季節、AQI 等級、風速等級)
-    - [ ] 訓練集/驗證集/測試集分割完成 (70/15/15)
+    - [x] 數據載入與清洗腳本完成
+    - [x] 特徵工程函式 (季節、AQI 等級、風速等級)
+    - [x] 訓練集/驗證集/測試集分割完成 (70/15/15)
 - **Testing Plan**:
-    - Unit Test: 驗證特徵衍生邏輯正確
-    - 資料驗證: 確認無缺失值、資料型別正確
+    - Unit Test: 驗證特徵衍生邏輯正確 ✅ (20/20 passed)
+    - 資料驗證: 確認無缺失值、資料型別正確 ✅
 - **Dependencies**: 現有數據後端 (`src/main/python/utils/data_loader.py`)
 - **Constraints**: 優先使用 2023 年數據以延續期中報告
-- **Completion Status**: 未開始
+- **Completion Status**: ✅ 已完成 (2026/01/01)
 - **Notes**: 特徵工程需與期中報告的分類標準一致（風速等級、AQI 等級）
+- **Complete Summary**: 
+    - 建立 `models/` 模組，包含 `__init__.py` 與 `data_preprocessing.py`
+    - 實作特徵工程函式：季節標籤 (12個月→4季)、AQI 等級 (≤50良好/≤100普通/>100不健康)、風速等級 (≤1.5無風/≤3.4輕風/>3.4微風以上)
+    - 資料清洗：移除 NaN (21,729筆) 與 AQI=-1 哨兵值 (64筆)，共清理 8.12%
+    - 資料分割：70%訓練/15%驗證/15%測試，共 246,718 筆有效資料
+    - 縣市篩選：延續期中報告使用 New Taipei City、Changhua County、Kaohsiung City
+    - 特徵欄位：windspeed, month, hour, season_encoded, county_encoded
+    - 新增 `save_cleaned_data()` 函式，可將處理後資料存為 Parquet 格式，存於 `data\processed\model_used\cleaned`
+    - 單元測試：24 個測試案例全數通過 (pytest) 
 
 ---
 
@@ -44,7 +53,7 @@
     - How: 使用 scikit-learn 建立多元線性回歸模型，輸出係數表與評估指標
 - **Resources Required**:
     - Materials: `sklearn.linear_model.LinearRegression`, `sklearn.metrics`
-    - Personnel: 開發者
+    - Personnel: 潘驄杰
     - Reference Codes/docs: 
         - `docs/finalReport/spec/02-models.md` (2.2 節)
         - `CourseCode/ai_statistic_model/AIp09/AIp09時序與回歸A.py`
@@ -72,7 +81,7 @@
     - How: 使用 scikit-learn 建立決策樹分類器，限制深度以確保可視化效果
 - **Resources Required**:
     - Materials: `sklearn.tree.DecisionTreeClassifier`, `sklearn.tree.plot_tree`
-    - Personnel: 開發者
+    - Personnel: 潘驄杰
     - Reference Codes/docs:
         - `docs/finalReport/spec/02-models.md` (2.3 節)
         - `CourseCode/ai_statistic_model/AIp10/AIp10決策與分類A.py`
@@ -100,7 +109,7 @@
     - How: 使用 scikit-learn 建立隨機森林模型，與決策樹進行準確度比較
 - **Resources Required**:
     - Materials: `sklearn.ensemble.RandomForestClassifier`
-    - Personnel: 開發者
+    - Personnel: 潘驄杰
     - Reference Codes/docs:
         - `docs/finalReport/spec/02-models.md` (2.4 節)
         - `CourseCode/ai_statistic_model/AIp10/AIp10決策與分類A.py`
@@ -128,7 +137,7 @@
     - How: 修改現有 page5_prediction_model.py，整合三個模型後端，新增預測互動功能
 - **Resources Required**:
     - Materials: `streamlit`, `plotly`, `matplotlib`
-    - Personnel: 開發者
+    - Personnel: 潘驄杰
     - Reference Codes/docs:
         - `docs/finalReport/spec/03-streamlit-ui.md`
         - `src/main/python/pages/page5_prediction_model.py`
@@ -156,8 +165,8 @@
     - Why: 符合繳交要求，完整呈現專案成果
     - How: 撰寫報告內容，包含研究動機、模型說明、結果分析、結論
 - **Resources Required**:
-    - Materials: Word / LaTeX / Markdown
-    - Personnel: 全體組員
+    - Materials: Word
+    - Personnel: 黎彥德、張家睿
     - Reference Codes/docs: 期中報告、spec 文件
 - **Deliverables**:
     - [ ] 報告大綱確認
