@@ -26,6 +26,8 @@ from data_preprocessing import (
     split_data,
     encode_categorical_features,
     clean_data,
+    create_lag_features,
+    get_lag_feature_names,
 )
 
 
@@ -356,6 +358,93 @@ class TestEncodeFeatures:
         
         assert 'season' in encoders
         assert hasattr(encoders['season'], 'inverse_transform')
+
+
+# ============================================================================
+# Test: create_lag_features()
+# ============================================================================
+
+class TestLagFeatures:
+    """Tests for lag feature creation function."""
+    
+    @pytest.fixture
+    def time_series_df(self):
+        """Create a time-series DataFrame for testing lag features."""
+        # 模擬兩個縣市各 5 小時的資料
+        dates = pd.date_range('2023-01-01', periods=5, freq='h')
+        return pd.DataFrame({
+            'date': list(dates) * 2,
+            'county': ['台北'] * 5 + ['高雄'] * 5,
+            'pm2.5': [10, 20, 30, 40, 50] + [15, 25, 35, 45, 55],
+            'pm10': [20, 30, 40, 50, 60] + [25, 35, 45, 55, 65],
+            'o3': [5, 10, 15, 20, 25] + [8, 13, 18, 23, 28],
+            'aqi': [30, 40, 50, 60, 70] + [35, 45, 55, 65, 75],
+        })
+    
+    def test_lag_columns_created(self, time_series_df):
+        """Test that lag columns are created correctly."""
+        result = create_lag_features(time_series_df, lag_cols=['pm2.5', 'pm10'], lags=[1])
+        
+        assert 'pm2.5_lag1' in result.columns
+        assert 'pm10_lag1' in result.columns
+    
+    def test_lag_shift_correct(self, time_series_df):
+        """Test that lag1 equals the previous row's value within the same group."""
+        result = create_lag_features(time_series_df, lag_cols=['pm2.5'], lags=[1], drop_na=False)
+        
+        # 檢查台北的 lag 值（排序後）
+        taipei = result[result['county'] == '台北'].sort_values('date').reset_index(drop=True)
+        
+        # 第 0 筆應該是 NaN（沒有前一筆）
+        assert pd.isna(taipei.loc[0, 'pm2.5_lag1'])
+        
+        # 第 1 筆的 lag1 應該等於第 0 筆的 pm2.5
+        assert taipei.loc[1, 'pm2.5_lag1'] == 10  # 台北的第一個 pm2.5 值
+        
+        # 第 2 筆的 lag1 應該等於第 1 筆的 pm2.5
+        assert taipei.loc[2, 'pm2.5_lag1'] == 20
+    
+    def test_group_by_county(self, time_series_df):
+        """Test that shift is done within each county group (no cross-county leakage)."""
+        result = create_lag_features(time_series_df, lag_cols=['pm2.5'], lags=[1], drop_na=False)
+        
+        # 高雄的第一筆也應該是 NaN（不是台北的最後一筆）
+        kaohsiung_first = result[result['county'] == '高雄'].sort_values('date').iloc[0]
+        assert pd.isna(kaohsiung_first['pm2.5_lag1'])
+    
+    def test_no_nan_after_dropna(self, time_series_df):
+        """Test that no NaN remains after drop_na=True."""
+        result = create_lag_features(time_series_df, lag_cols=['pm2.5'], lags=[1], drop_na=True)
+        
+        assert result['pm2.5_lag1'].isna().sum() == 0
+    
+    def test_rows_dropped_count(self, time_series_df):
+        """Test that correct number of rows are dropped (1 per county for lag1)."""
+        original_len = len(time_series_df)
+        result = create_lag_features(time_series_df, lag_cols=['pm2.5'], lags=[1], drop_na=True)
+        
+        # 2 個縣市各 drop 1 筆 (因為 lag1 最前面 1 筆是 NaN)
+        expected_dropped = 2  # 每個縣市 1 筆
+        assert len(result) == original_len - expected_dropped
+    
+    def test_multiple_lags(self, time_series_df):
+        """Test creating multiple lag steps."""
+        result = create_lag_features(time_series_df, lag_cols=['pm2.5'], lags=[1, 2], drop_na=False)
+        
+        assert 'pm2.5_lag1' in result.columns
+        assert 'pm2.5_lag2' in result.columns
+    
+    def test_get_lag_feature_names(self):
+        """Test get_lag_feature_names helper function."""
+        names = get_lag_feature_names(lag_cols=['pm2.5', 'pm10'], lags=[1])
+        
+        assert names == ['pm2.5_lag1', 'pm10_lag1']
+    
+    def test_get_lag_feature_names_multiple_lags(self):
+        """Test get_lag_feature_names with multiple lags."""
+        names = get_lag_feature_names(lag_cols=['pm2.5'], lags=[1, 24])
+        
+        assert names == ['pm2.5_lag1', 'pm2.5_lag24']
 
 
 # ============================================================================

@@ -50,23 +50,40 @@
     - 新增函式：`save_multiyear_splits()`, `load_training_splits()`, `splits_exist()`
     - 單元測試：24 個測試案例全數通過 (pytest) 
 
-### [ ] **Task ID**: FR-001-B
-- **Task Name**: 修正特徵洩漏問題
+### [x] **Task ID**: FR-001-B
+- **Task Name**: 修正特徵洩漏問題（Lag Features 方案）
 - **Work Description**:
-    - Why: pm2.5, pm10, o3 是計算 AQI 的原料，用它們預測 AQI 是循環論證
-    - How: 從回歸/分類特徵中移除污染物欄位，僅保留氣象與時間特徵
+    - Why: 用 $t$ 時刻的污染物預測 $t$ 時刻的 AQI 是 Data Leakage（循環論證）
+    - Why Not Remove: 完全移除污染物會丟失最強預測因子（污染物具有自相關性/慣性）
+    - How: 使用「滯後特徵 (Lag Features)」—— 用 $t-1$ 的污染物預測 $t$ 時刻的 AQI
 - **Resources Required**:
-    - Materials: `data_preprocessing.py`
+    - Materials: `data_preprocessing.py`, `pandas.DataFrame.shift()`
     - Personnel: 潘驄杰
 - **Deliverables**:
-    - [ ] 更新 `prepare_*_multiyear()` 預設特徵列表
-    - [ ] 確認特徵只包含：windspeed, month, hour, season_encoded, county_encoded
+    - [x] 新增 `create_lag_features()` 函式
+    - [x] 產生滯後特徵：`pm2.5_lag1`, `pm10_lag1`, `o3_lag1`
+    - [x] 處理 lag 產生的 NaN（移除 shift 產生的空值，約 8.96%）
+    - [x] 更新 `prepare_*_multiyear()` 使用新特徵列表
+    - [x] 最終特徵：`pm2.5_lag1`, `pm10_lag1`, `o3_lag1`, `windspeed`, `month`, `hour`, `season_encoded`, `county_encoded`
 - **Testing Plan**:
-    - 驗證模型訓練時不包含 pm2.5, pm10, o3, no2, so2, co
+    - 驗證 lag 特徵正確偏移（$t$ 列的 `pm2.5_lag1` 等於 $t-1$ 列的 `pm2.5`）✅
+    - 驗證無 NaN 殘留 ✅
+    - 單元測試：31 個測試案例全數通過 (含 8 個新增 Lag Features 測試)
 - **Dependencies**: FR-001
-- **Constraints**: 需確保回歸係數可解釋
-- **Completion Status**: 未開始
+- **Constraints**: 需確保時間排序正確後才做 shift
+- **Completion Status**: ✅ 已完成 (2026/01/01)
 - **Priority**: P0
+- **Complete Summary**:
+    - 新增 `create_lag_features()` 函式，使用 `groupby().shift()` 產生滯後特徵
+    - 新增 `get_lag_feature_names()` 輔助函式
+    - 更新 `MODEL_COLS` 常數，加入 lag 特徵欄位
+    - 更新 `prepare_regression_data_multiyear()` 與 `prepare_classification_data_multiyear()` 預設使用 lag 特徵
+    - 更新 `save_multiyear_splits()` 加入 lag 特徵產生步驟
+    - 新增 8 個單元測試 (`TestLagFeatures` 類別)
+    - 重新產生 parquet 檔案：
+        - `train_2017_2022.parquet` (1,365,839 rows, 14.0 MB)
+        - `val_2023_h1.parquet` (118,963 rows, 1.2 MB)
+        - `test_2023_h2.parquet` (118,963 rows, 1.2 MB)
 
 ### [ ] **Task ID**: FR-001-C
 - **Task Name**: 季節編碼改進

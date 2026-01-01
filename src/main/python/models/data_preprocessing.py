@@ -122,6 +122,106 @@ def add_wind_level(df: pd.DataFrame, wind_col: str = 'windspeed') -> pd.DataFram
 
 
 # ============================================================================
+# Lag Features (避免 Data Leakage)
+# ============================================================================
+
+# 預設使用的污染物欄位及滯後步數
+DEFAULT_LAG_COLS = ['pm2.5', 'pm10', 'o3']
+DEFAULT_LAGS = [1]  # 只用 lag1 (前一小時)
+
+
+def create_lag_features(
+    df: pd.DataFrame,
+    lag_cols: List[str] = None,
+    lags: List[int] = None,
+    group_col: str = 'county',
+    date_col: str = 'date',
+    drop_na: bool = True
+) -> pd.DataFrame:
+    """
+    Create lag features for time-series prediction.
+    
+    為污染物欄位產生滯後特徵，避免 Data Leakage。
+    例如：用 t-1 時刻的 PM2.5 預測 t 時刻的 AQI。
+    
+    ⚠️ 重要：
+    - 資料必須先按 (group_col, date_col) 排序
+    - shift() 按 group 分組，避免不同縣市的資料混淆
+    - 產生的 lag 欄位前幾筆會是 NaN（因為沒有前一小時資料）
+    
+    Args:
+        df: DataFrame with pollutant columns
+        lag_cols: Columns to create lag features for (default: pm2.5, pm10, o3)
+        lags: List of lag steps (default: [1] = 前一小時)
+        group_col: Column to group by (prevent cross-county leakage)
+        date_col: Column for sorting by time
+        drop_na: Whether to drop rows with NaN lag values
+        
+    Returns:
+        DataFrame with lag features added (e.g., pm2.5_lag1, pm10_lag1)
+        
+    Example:
+        >>> df = create_lag_features(df, lag_cols=['pm2.5', 'pm10'], lags=[1, 24])
+        # Creates: pm2.5_lag1, pm2.5_lag24, pm10_lag1, pm10_lag24
+    """
+    if lag_cols is None:
+        lag_cols = DEFAULT_LAG_COLS
+    if lags is None:
+        lags = DEFAULT_LAGS
+    
+    df = df.copy()
+    
+    # 確保資料按時間排序
+    if date_col in df.columns:
+        df = df.sort_values([group_col, date_col]).reset_index(drop=True)
+    
+    # 產生 lag 特徵
+    lag_feature_names = []
+    for col in lag_cols:
+        if col not in df.columns:
+            print(f"  Warning: Column '{col}' not found, skipping lag features for it.")
+            continue
+            
+        for lag in lags:
+            lag_col_name = f'{col}_lag{lag}'
+            # groupby 確保不同縣市不會互相 shift
+            df[lag_col_name] = df.groupby(group_col)[col].shift(lag)
+            lag_feature_names.append(lag_col_name)
+    
+    created_count = len(lag_feature_names)
+    print(f"Created {created_count} lag features: {lag_feature_names}")
+    
+    # 移除因 shift 產生的 NaN
+    if drop_na and lag_feature_names:
+        before_len = len(df)
+        df = df.dropna(subset=lag_feature_names)
+        dropped = before_len - len(df)
+        if dropped > 0:
+            print(f"Dropped {dropped:,} rows with NaN lag values ({dropped/before_len*100:.2f}%)")
+    
+    return df
+
+
+def get_lag_feature_names(lag_cols: List[str] = None, lags: List[int] = None) -> List[str]:
+    """
+    Get the list of lag feature column names that would be created.
+    
+    Args:
+        lag_cols: Columns to create lag features for
+        lags: List of lag steps
+        
+    Returns:
+        List of lag feature column names
+    """
+    if lag_cols is None:
+        lag_cols = DEFAULT_LAG_COLS
+    if lags is None:
+        lags = DEFAULT_LAGS
+    
+    return [f'{col}_lag{lag}' for col in lag_cols for lag in lags]
+
+
+# ============================================================================
 # Data Saving and Loading (Cleaned Data)
 # ============================================================================
 
@@ -137,7 +237,10 @@ MODEL_COLS = [
     'month', 'hour',  # 時間特徵
     'season', 'season_encoded',      # 季節
     'county_encoded',                 # 空間
-    'wind_level', 'wind_level_encoded'  # 風速等級
+    'wind_level', 'wind_level_encoded',  # 風速等級
+    # Lag Features (避免 Data Leakage)
+    'pm2.5', 'pm10', 'o3',           # 原始污染物（供產生 lag 用）
+    'pm2.5_lag1', 'pm10_lag1', 'o3_lag1',  # 滯後特徵
 ]
 
 
@@ -252,17 +355,23 @@ def save_multiyear_splits(
     print("=" * 60)
     
     # Load and process training data
-    print(f"\n[1/3] Loading training data ({train_years[0]}-{train_years[-1]})...")
+    print(f"\n[1/4] Loading training data ({train_years[0]}-{train_years[-1]})...")
     df_train = load_multi_year_data(years=train_years, counties=counties)
     df_train = apply_feature_engineering(df_train)
+    
+    # Create lag features (避免 Data Leakage)
+    print(f"\n[2/4] Creating lag features...")
+    df_train = create_lag_features(df_train)
+    
     required = ['aqi', 'aqi_level', 'windspeed', 'month', 'date', 'season']
     df_train = clean_data(df_train, required)
     df_train, encoders = encode_categorical_features(df_train)
     
     # Load and process test year data
-    print(f"\n[2/3] Loading test year data ({test_year})...")
+    print(f"\n[3/4] Loading test year data ({test_year})...")
     df_test_year = load_training_data(year=test_year, counties=counties)
     df_test_year = apply_feature_engineering(df_test_year)
+    df_test_year = create_lag_features(df_test_year)
     df_test_year = clean_data(df_test_year, required)
     
     # Apply same encoding (fit on train)
@@ -285,7 +394,7 @@ def save_multiyear_splits(
     df_test = df_test[available_cols]
     
     # Save files
-    print(f"\n[3/3] Saving splits...")
+    print(f"\n[4/4] Saving splits...")
     results = {}
     
     # Train
@@ -792,7 +901,12 @@ def prepare_regression_data_multiyear(
     if train_years is None:
         train_years = list(range(2017, 2023))  # 2017-2022
     if feature_cols is None:
-        feature_cols = ['windspeed', 'month', 'hour', 'season_encoded', 'county_encoded']
+        # 預設特徵包含 lag 特徵（避免 Data Leakage）
+        feature_cols = [
+            'pm2.5_lag1', 'pm10_lag1', 'o3_lag1',  # Lag 特徵
+            'windspeed', 'month', 'hour',          # 氣象 & 時間
+            'season_encoded', 'county_encoded'     # 編碼
+        ]
     
     print(f"[Multi-Year Training] Train: {train_years}, Val/Test: {test_year}")
     
@@ -808,7 +922,12 @@ def prepare_regression_data_multiyear(
     df_train = apply_feature_engineering(df_train)
     df_test_year = apply_feature_engineering(df_test_year)
     
-    # Clean data
+    # Create lag features (避免 Data Leakage)
+    print("Creating lag features...")
+    df_train = create_lag_features(df_train)
+    df_test_year = create_lag_features(df_test_year)
+    
+    # Clean data (lag features 已經在 create_lag_features 處理 NaN)
     required = ['aqi', 'windspeed', 'month', 'date']
     df_train = clean_data(df_train, required)
     df_test_year = clean_data(df_test_year, required)
@@ -880,7 +999,12 @@ def prepare_classification_data_multiyear(
     if train_years is None:
         train_years = list(range(2017, 2023))  # 2017-2022
     if feature_cols is None:
-        feature_cols = ['windspeed', 'month', 'hour', 'season_encoded', 'county_encoded']
+        # 預設特徵包含 lag 特徵（避免 Data Leakage）
+        feature_cols = [
+            'pm2.5_lag1', 'pm10_lag1', 'o3_lag1',  # Lag 特徵
+            'windspeed', 'month', 'hour',          # 氣象 & 時間
+            'season_encoded', 'county_encoded'     # 編碼
+        ]
     
     print(f"[Multi-Year Training] Train: {train_years}, Val/Test: {test_year}")
     
@@ -896,7 +1020,12 @@ def prepare_classification_data_multiyear(
     df_train = apply_feature_engineering(df_train)
     df_test_year = apply_feature_engineering(df_test_year)
     
-    # Clean data
+    # Create lag features (避免 Data Leakage)
+    print("Creating lag features...")
+    df_train = create_lag_features(df_train)
+    df_test_year = create_lag_features(df_test_year)
+    
+    # Clean data (lag features 已經在 create_lag_features 處理 NaN)
     required = ['aqi', 'aqi_level', 'windspeed', 'month', 'date']
     df_train = clean_data(df_train, required)
     df_test_year = clean_data(df_test_year, required)
