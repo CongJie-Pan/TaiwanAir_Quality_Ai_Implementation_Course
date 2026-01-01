@@ -3,7 +3,7 @@
 **課程**: 人工智慧實務
 **組員**: 黎彥德、張家睿、潘驄杰
 **繳交日期**: 2026/01/07
-**最後更新**: 2024/12/31
+**最後更新**: 2026/01/01
 
 > ⚠️ **補充要求**：不一定要有模型評估，但**至少要有 2-4 個模型解讀**
 > 重點在於解釋模型結果的意義，而非僅呈現準確度數字
@@ -16,7 +16,7 @@
 - **Task Name**: 數據前處理與特徵工程
 - **Work Description**:
     - Why: 為三個 AI 模型準備乾淨且標準化的輸入數據
-    - How: 載入 2023 年數據，產生季節、AQI 等級等衍生特徵，處理缺失值，分割訓練/測試集
+    - How: 載入多年數據，產生季節、AQI 等級等衍生特徵，處理缺失值，分割訓練/測試集
 - **Resources Required**:
     - Materials: `pandas`, `numpy`, `sklearn.model_selection`
     - Personnel: 潘驄杰
@@ -24,23 +24,103 @@
 - **Deliverables**:
     - [x] 數據載入與清洗腳本完成
     - [x] 特徵工程函式 (季節、AQI 等級、風速等級)
-    - [x] 訓練集/驗證集/測試集分割完成 (70/15/15)
+    - [x] 訓練集/驗證集/測試集分割完成 (多年訓練方案)
+    - [x] 多年訓練資料預處理與存檔
 - **Testing Plan**:
-    - Unit Test: 驗證特徵衍生邏輯正確 ✅ (20/20 passed)
+    - Unit Test: 驗證特徵衍生邏輯正確 ✅ (24/24 passed)
     - 資料驗證: 確認無缺失值、資料型別正確 ✅
 - **Dependencies**: 現有數據後端 (`src/main/python/utils/data_loader.py`)
-- **Constraints**: 優先使用 2023 年數據以延續期中報告
+- **Constraints**: 使用多年資料避免時間序列洩漏
 - **Completion Status**: ✅ 已完成 (2026/01/01)
 - **Notes**: 特徵工程需與期中報告的分類標準一致（風速等級、AQI 等級）
 - **Complete Summary**: 
     - 建立 `models/` 模組，包含 `__init__.py` 與 `data_preprocessing.py`
     - 實作特徵工程函式：季節標籤 (12個月→4季)、AQI 等級 (≤50良好/≤100普通/>100不健康)、風速等級 (≤1.5無風/≤3.4輕風/>3.4微風以上)
-    - 資料清洗：移除 NaN (21,729筆) 與 AQI=-1 哨兵值 (64筆)，共清理 8.12%
-    - 資料分割：70%訓練/15%驗證/15%測試，共 246,718 筆有效資料
+    - 資料清洗：移除 NaN 與 AQI=-1 哨兵值，訓練集清理 7.10%，測試年清理 8.12%
+    - **多年訓練方案**（防止時間序列洩漏）：
+        - 訓練集：2017-2022 年（1,494,466 筆，6年×12月完整季節學習）
+        - 驗證集：2023 年上半年（123,359 筆）
+        - 測試集：2023 年下半年（123,359 筆）
     - 縣市篩選：延續期中報告使用 New Taipei City、Changhua County、Kaohsiung City
     - 特徵欄位：windspeed, month, hour, season_encoded, county_encoded
-    - 新增 `save_cleaned_data()` 函式，可將處理後資料存為 Parquet 格式，存於 `data\processed\model_used\cleaned`
+    - 資料存檔：`data/processed/model_used/cleaned/`
+        - `train_2017_2022.parquet` (5.5 MB)
+        - `val_2023_h1.parquet` (0.5 MB)
+        - `test_2023_h2.parquet` (0.4 MB)
+    - 新增函式：`save_multiyear_splits()`, `load_training_splits()`, `splits_exist()`
     - 單元測試：24 個測試案例全數通過 (pytest) 
+
+### [ ] **Task ID**: FR-001-B
+- **Task Name**: 修正特徵洩漏問題
+- **Work Description**:
+    - Why: pm2.5, pm10, o3 是計算 AQI 的原料，用它們預測 AQI 是循環論證
+    - How: 從回歸/分類特徵中移除污染物欄位，僅保留氣象與時間特徵
+- **Resources Required**:
+    - Materials: `data_preprocessing.py`
+    - Personnel: 潘驄杰
+- **Deliverables**:
+    - [ ] 更新 `prepare_*_multiyear()` 預設特徵列表
+    - [ ] 確認特徵只包含：windspeed, month, hour, season_encoded, county_encoded
+- **Testing Plan**:
+    - 驗證模型訓練時不包含 pm2.5, pm10, o3, no2, so2, co
+- **Dependencies**: FR-001
+- **Constraints**: 需確保回歸係數可解釋
+- **Completion Status**: 未開始
+- **Priority**: P0
+
+### [ ] **Task ID**: FR-001-C
+- **Task Name**: 季節編碼改進
+- **Work Description**:
+    - Why: LabelEncoder 會讓模型誤認為季節有順序關係（如冬季=0 < 夏季=1）
+    - How: 改用 One-Hot Encoding，產生 4 個二元欄位 (season_春/夏/秋/冬)
+- **Resources Required**:
+    - Materials: `pandas.get_dummies()` 或 `sklearn.preprocessing.OneHotEncoder`
+    - Personnel: 潘驄杰
+- **Deliverables**:
+    - [ ] 新增 `encode_onehot()` 函式
+    - [ ] 更新特徵欄位文件
+- **Testing Plan**:
+    - 驗證產出 4 個 season_* 欄位
+- **Dependencies**: FR-001
+- **Constraints**: 需確保編碼與既有資料相容
+- **Completion Status**: 未開始
+- **Priority**: P1
+
+### [ ] **Task ID**: FR-001-D
+- **Task Name**: 類別不平衡檢查
+- **Work Description**:
+    - Why: aqi_level 三類別可能分佈不均（如良好佔60%，不健康佔5%）
+    - How: 訓練前檢查類別分佈，考慮使用 class_weight='balanced' 或 SMOTE
+- **Resources Required**:
+    - Materials: `sklearn.utils.class_weight`, `imbalanced-learn` (可選)
+    - Personnel: 潘驄杰
+- **Deliverables**:
+    - [ ] 新增 `check_class_distribution()` 函式
+    - [ ] 在分類任務中輸出類別分佈報告
+- **Testing Plan**:
+    - 確認訓練/驗證/測試集類別分佈一致
+- **Dependencies**: FR-001
+- **Constraints**: 對分類任務（決策樹、隨機森林）影響較大
+- **Completion Status**: 未開始
+- **Priority**: P2
+
+### [ ] **Task ID**: FR-001-E
+- **Task Name**: 特徵標準化選項
+- **Work Description**:
+    - Why: 線性迴歸係數比較需要特徵有相同尺度（windspeed: 0-15, month: 1-12）
+    - How: 加入 StandardScaler 選項，讓係數可直接比較重要性
+- **Resources Required**:
+    - Materials: `sklearn.preprocessing.StandardScaler`
+    - Personnel: 潘驄杰
+- **Deliverables**:
+    - [ ] 在線性迴歸模型中加入 standardize 參數
+    - [ ] 標準化後係數與原始係數對照表
+- **Testing Plan**:
+    - 驗證標準化後特徵均值≈0、標準差≈1
+- **Dependencies**: FR-001, FR-002
+- **Constraints**: 僅對線性迴歸有影響，決策樹類模型不需要
+- **Completion Status**: 未開始
+- **Priority**: P3
 
 ---
 

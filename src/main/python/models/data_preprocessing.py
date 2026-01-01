@@ -219,6 +219,151 @@ def cleaned_data_exists(year: int = 2023, version: str = 'model') -> bool:
     return (CLEANED_DATA_DIR / filename).exists()
 
 
+def save_multiyear_splits(
+    train_years: List[int] = None,
+    test_year: int = 2023,
+    counties: Optional[List[str]] = None
+) -> dict:
+    """
+    Save pre-processed train/val/test splits for multi-year training.
+    
+    產出三個檔案：
+    - train_{start}_{end}.parquet: 訓練集（多年資料）
+    - val_{test_year}_h1.parquet: 驗證集（測試年上半年）
+    - test_{test_year}_h2.parquet: 測試集（測試年下半年）
+    
+    Args:
+        train_years: Years for training (default: 2017-2022)
+        test_year: Year for validation/testing (default: 2023)
+        counties: Counties to include
+        
+    Returns:
+        Dict with paths to all saved files
+    """
+    if train_years is None:
+        train_years = list(range(2017, 2023))
+    if counties is None:
+        counties = ['New Taipei City', 'Changhua County', 'Kaohsiung City']
+    
+    CLEANED_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    
+    print("=" * 60)
+    print("Generating Multi-Year Training Splits")
+    print("=" * 60)
+    
+    # Load and process training data
+    print(f"\n[1/3] Loading training data ({train_years[0]}-{train_years[-1]})...")
+    df_train = load_multi_year_data(years=train_years, counties=counties)
+    df_train = apply_feature_engineering(df_train)
+    required = ['aqi', 'aqi_level', 'windspeed', 'month', 'date', 'season']
+    df_train = clean_data(df_train, required)
+    df_train, encoders = encode_categorical_features(df_train)
+    
+    # Load and process test year data
+    print(f"\n[2/3] Loading test year data ({test_year})...")
+    df_test_year = load_training_data(year=test_year, counties=counties)
+    df_test_year = apply_feature_engineering(df_test_year)
+    df_test_year = clean_data(df_test_year, required)
+    
+    # Apply same encoding (fit on train)
+    for col, le in encoders.items():
+        if col in df_test_year.columns:
+            df_test_year[f'{col}_encoded'] = df_test_year[col].astype(str).apply(
+                lambda x: le.transform([x])[0] if x in le.classes_ else -1
+            )
+    
+    # Sort and split test year
+    df_test_year = df_test_year.sort_values('date').reset_index(drop=True)
+    mid_point = len(df_test_year) // 2
+    df_val = df_test_year.iloc[:mid_point]
+    df_test = df_test_year.iloc[mid_point:]
+    
+    # Select only model columns
+    available_cols = [col for col in MODEL_COLS if col in df_train.columns]
+    df_train = df_train[available_cols]
+    df_val = df_val[available_cols]
+    df_test = df_test[available_cols]
+    
+    # Save files
+    print(f"\n[3/3] Saving splits...")
+    results = {}
+    
+    # Train
+    train_path = CLEANED_DATA_DIR / f'train_{train_years[0]}_{train_years[-1]}.parquet'
+    df_train.to_parquet(train_path, index=False, compression='snappy')
+    results['train'] = train_path
+    print(f"  ✅ Train: {train_path.name} ({len(df_train):,} rows, {train_path.stat().st_size/1024/1024:.1f} MB)")
+    
+    # Validation
+    val_path = CLEANED_DATA_DIR / f'val_{test_year}_h1.parquet'
+    df_val.to_parquet(val_path, index=False, compression='snappy')
+    results['val'] = val_path
+    print(f"  ✅ Val:   {val_path.name} ({len(df_val):,} rows, {val_path.stat().st_size/1024/1024:.1f} MB)")
+    
+    # Test
+    test_path = CLEANED_DATA_DIR / f'test_{test_year}_h2.parquet'
+    df_test.to_parquet(test_path, index=False, compression='snappy')
+    results['test'] = test_path
+    print(f"  ✅ Test:  {test_path.name} ({len(df_test):,} rows, {test_path.stat().st_size/1024/1024:.1f} MB)")
+    
+    print(f"\n✅ All splits saved to: {CLEANED_DATA_DIR}")
+    
+    return results
+
+
+def load_training_splits(
+    train_years: List[int] = None,
+    test_year: int = 2023
+) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """
+    Load pre-saved train/val/test splits.
+    
+    Args:
+        train_years: Training year range (for filename)
+        test_year: Test year (for filename)
+        
+    Returns:
+        Tuple of (df_train, df_val, df_test)
+    """
+    if train_years is None:
+        train_years = list(range(2017, 2023))
+    
+    train_path = CLEANED_DATA_DIR / f'train_{train_years[0]}_{train_years[-1]}.parquet'
+    val_path = CLEANED_DATA_DIR / f'val_{test_year}_h1.parquet'
+    test_path = CLEANED_DATA_DIR / f'test_{test_year}_h2.parquet'
+    
+    # Check all files exist
+    for path in [train_path, val_path, test_path]:
+        if not path.exists():
+            raise FileNotFoundError(
+                f"Split file not found: {path}\n"
+                f"Run save_multiyear_splits() first to generate splits."
+            )
+    
+    df_train = pd.read_parquet(train_path)
+    df_val = pd.read_parquet(val_path)
+    df_test = pd.read_parquet(test_path)
+    
+    print(f"✅ Loaded training splits:")
+    print(f"   Train: {len(df_train):,} rows")
+    print(f"   Val:   {len(df_val):,} rows")
+    print(f"   Test:  {len(df_test):,} rows")
+    
+    return df_train, df_val, df_test
+
+
+def splits_exist(train_years: List[int] = None, test_year: int = 2023) -> bool:
+    """Check if all split files exist."""
+    if train_years is None:
+        train_years = list(range(2017, 2023))
+    
+    train_path = CLEANED_DATA_DIR / f'train_{train_years[0]}_{train_years[-1]}.parquet'
+    val_path = CLEANED_DATA_DIR / f'val_{test_year}_h1.parquet'
+    test_path = CLEANED_DATA_DIR / f'test_{test_year}_h2.parquet'
+    
+    return all(p.exists() for p in [train_path, val_path, test_path])
+
+
 # ============================================================================
 # Data Loading and Preparation
 # ============================================================================
@@ -228,7 +373,7 @@ def load_training_data(
     counties: Optional[List[str]] = None
 ) -> pd.DataFrame:
     """
-    Load training data from parquet files.
+    Load training data from parquet files for a single year.
     
     Args:
         year: Year of data to load (default: 2023)
@@ -253,6 +398,50 @@ def load_training_data(
     loader.close()
     
     return df
+
+
+def load_multi_year_data(
+    years: List[int],
+    counties: Optional[List[str]] = None
+) -> pd.DataFrame:
+    """
+    Load data from multiple years for comprehensive training.
+    
+    多年訓練方案：讓模型學習所有季節的完整模式。
+    例如：用 2016-2022 年資料訓練，模型可學到 7 年份 × 12 月份的季節規律。
+    
+    Args:
+        years: List of years to load (e.g., [2016, 2017, ..., 2022])
+        counties: List of counties to filter
+        
+    Returns:
+        Combined DataFrame from all specified years
+    """
+    if counties is None:
+        counties = ['New Taipei City', 'Changhua County', 'Kaohsiung City']
+    
+    loader = AirQualityDataLoader(data_dir=str(PROJECT_ROOT))
+    
+    all_dfs = []
+    for year in years:
+        try:
+            df = loader.load_by_year(year)
+            if counties:
+                df = df[df['county'].isin(counties)]
+            all_dfs.append(df)
+            print(f"  Loaded {year}: {len(df):,} rows")
+        except Exception as e:
+            print(f"  Warning: Could not load {year}: {e}")
+    
+    loader.close()
+    
+    if not all_dfs:
+        raise ValueError("No data loaded from any year")
+    
+    combined_df = pd.concat(all_dfs, ignore_index=True)
+    print(f"  Total: {len(combined_df):,} rows from {len(all_dfs)} years")
+    
+    return combined_df
 
 
 def apply_feature_engineering(df: pd.DataFrame) -> pd.DataFrame:
@@ -353,6 +542,76 @@ def encode_categorical_features(
     return df, encoders
 
 
+def split_data_temporal(
+    df: pd.DataFrame,
+    target_col: str,
+    feature_cols: List[str],
+    date_col: str = 'date',
+    train_ratio: float = 0.70,
+    val_ratio: float = 0.15
+) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.Series, pd.Series, pd.Series]:
+    """
+    Split data chronologically for time-series to prevent data leakage.
+    
+    ⚠️ 重要：時間序列資料必須按時間順序分割！
+    隨機分割會導致「用未來預測過去」的資料洩漏問題。
+    
+    分割策略（以 2023 年為例）：
+    - 訓練集 (70%): 1月 - 9月初
+    - 驗證集 (15%): 9月初 - 11月初  
+    - 測試集 (15%): 11月初 - 12月底
+    
+    Args:
+        df: DataFrame with date column (must be sorted or will be sorted)
+        target_col: Name of target column
+        feature_cols: List of feature column names
+        date_col: Name of date column for sorting
+        train_ratio: Proportion for training set (default: 0.70)
+        val_ratio: Proportion for validation set (default: 0.15)
+        
+    Returns:
+        Tuple of (X_train, X_val, X_test, y_train, y_val, y_test)
+    """
+    # Ensure data is sorted by date
+    df = df.sort_values(date_col).reset_index(drop=True)
+    
+    n = len(df)
+    train_end = int(n * train_ratio)
+    val_end = int(n * (train_ratio + val_ratio))
+    
+    # Split by position (chronological order)
+    train_df = df.iloc[:train_end]
+    val_df = df.iloc[train_end:val_end]
+    test_df = df.iloc[val_end:]
+    
+    # Extract features and target
+    X_train = train_df[feature_cols]
+    X_val = val_df[feature_cols]
+    X_test = test_df[feature_cols]
+    
+    y_train = train_df[target_col]
+    y_val = val_df[target_col]
+    y_test = test_df[target_col]
+    
+    # Report date ranges
+    if date_col in df.columns:
+        train_dates = f"{train_df[date_col].min()} ~ {train_df[date_col].max()}"
+        val_dates = f"{val_df[date_col].min()} ~ {val_df[date_col].max()}"
+        test_dates = f"{test_df[date_col].min()} ~ {test_df[date_col].max()}"
+        
+        print(f"Temporal data split complete (chronological order):")
+        print(f"  Train: {len(X_train):,} samples ({len(X_train)/n*100:.1f}%) | {train_dates}")
+        print(f"  Val:   {len(X_val):,} samples ({len(X_val)/n*100:.1f}%) | {val_dates}")
+        print(f"  Test:  {len(X_test):,} samples ({len(X_test)/n*100:.1f}%) | {test_dates}")
+    else:
+        print(f"Temporal data split complete:")
+        print(f"  Train: {len(X_train):,} samples ({len(X_train)/n*100:.1f}%)")
+        print(f"  Val:   {len(X_val):,} samples ({len(X_val)/n*100:.1f}%)")
+        print(f"  Test:  {len(X_test):,} samples ({len(X_test)/n*100:.1f}%)")
+    
+    return X_train, X_val, X_test, y_train, y_val, y_test
+
+
 def split_data(
     X: pd.DataFrame,
     y: pd.Series,
@@ -361,7 +620,10 @@ def split_data(
     random_state: int = 42
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.Series, pd.Series, pd.Series]:
     """
-    Split data into train/validation/test sets (70/15/15).
+    Split data into train/validation/test sets (70/15/15) using RANDOM splitting.
+    
+    ⚠️ 注意：此函式使用隨機分割，僅適用於非時間序列資料！
+    對於時間序列資料（如空氣品質預測），請使用 split_data_temporal()。
     
     Args:
         X: Feature matrix
@@ -390,7 +652,7 @@ def split_data(
         random_state=random_state
     )
     
-    print(f"Data split complete:")
+    print(f"Random data split complete (WARNING: not suitable for time-series!):")
     print(f"  Train: {len(X_train):,} samples ({len(X_train)/(len(X_train)+len(X_val)+len(X_test))*100:.1f}%)")
     print(f"  Val:   {len(X_val):,} samples ({len(X_val)/(len(X_train)+len(X_val)+len(X_test))*100:.1f}%)")
     print(f"  Test:  {len(X_test):,} samples ({len(X_test)/(len(X_train)+len(X_val)+len(X_test))*100:.1f}%)")
@@ -410,10 +672,12 @@ def prepare_regression_data(
     """
     Prepare data for regression task (predicting AQI value).
     
+    使用時間序列分割（按照日期順序），避免資料洩漏。
+    
     Args:
         year: Year of data to use
         counties: Counties to include
-        feature_cols: Feature columns (default: windspeed, month, hour, pm2.5, pm10, o3)
+        feature_cols: Feature columns (default: windspeed, month, hour, season_encoded, county_encoded)
         
     Returns:
         Tuple of (X_train, X_val, X_test, y_train, y_val, y_test, encoders)
@@ -426,19 +690,22 @@ def prepare_regression_data(
     df = apply_feature_engineering(df)
     
     # Clean data
-    required = ['aqi', 'windspeed', 'month']
+    required = ['aqi', 'windspeed', 'month', 'date']
     df = clean_data(df, required)
     
     # Encode categorical features
     df, encoders = encode_categorical_features(df)
     
-    # Select features and target
+    # Get available features
     available_features = [col for col in feature_cols if col in df.columns]
-    X = df[available_features]
-    y = df['aqi']
     
-    # Split data
-    X_train, X_val, X_test, y_train, y_val, y_test = split_data(X, y)
+    # Split data using TEMPORAL splitting (chronological order)
+    X_train, X_val, X_test, y_train, y_val, y_test = split_data_temporal(
+        df=df,
+        target_col='aqi',
+        feature_cols=available_features,
+        date_col='date'
+    )
     
     return X_train, X_val, X_test, y_train, y_val, y_test, encoders
 
@@ -450,6 +717,8 @@ def prepare_classification_data(
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.Series, pd.Series, pd.Series, dict]:
     """
     Prepare data for classification task (predicting AQI level).
+    
+    使用時間序列分割（按照日期順序），避免資料洩漏。
     
     Args:
         year: Year of data to use
@@ -467,23 +736,217 @@ def prepare_classification_data(
     df = apply_feature_engineering(df)
     
     # Clean data - need valid AQI to create aqi_level
-    required = ['aqi', 'aqi_level', 'windspeed', 'month']
+    required = ['aqi', 'aqi_level', 'windspeed', 'month', 'date']
     df = clean_data(df, required)
     
     # Encode categorical features
     df, encoders = encode_categorical_features(df)
     
-    # Encode target variable
+    # Encode target variable (add encoded column to df for temporal split)
     le_target = LabelEncoder()
-    y = le_target.fit_transform(df['aqi_level'])
+    df['aqi_level_encoded'] = le_target.fit_transform(df['aqi_level'])
     encoders['aqi_level'] = le_target
     
-    # Select features
+    # Get available features
     available_features = [col for col in feature_cols if col in df.columns]
-    X = df[available_features]
     
-    # Split data
-    X_train, X_val, X_test, y_train, y_val, y_test = split_data(X, pd.Series(y))
+    # Split data using TEMPORAL splitting (chronological order)
+    X_train, X_val, X_test, y_train, y_val, y_test = split_data_temporal(
+        df=df,
+        target_col='aqi_level_encoded',
+        feature_cols=available_features,
+        date_col='date'
+    )
+    
+    return X_train, X_val, X_test, y_train, y_val, y_test, encoders
+
+
+def prepare_regression_data_multiyear(
+    train_years: List[int] = None,
+    test_year: int = 2023,
+    counties: Optional[List[str]] = None,
+    feature_cols: Optional[List[str]] = None
+) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.Series, pd.Series, pd.Series, dict]:
+    """
+    Prepare data for regression using MULTI-YEAR training approach.
+    
+    多年訓練方案（最佳實踐）：
+    - 訓練集：2017-2022 年（6年 × 12月 = 完整季節學習）
+    - 驗證集：2023 年 1-6 月
+    - 測試集：2023 年 7-12 月
+    
+    優點：
+    1. 模型學習所有月份的季節模式
+    2. 沒有時間洩漏（永遠用過去預測未來）
+    3. 測試評估結果真實可信
+    
+    Args:
+        train_years: Years for training (default: 2017-2022)
+        test_year: Year for validation and testing (default: 2023)
+        counties: Counties to include
+        feature_cols: Feature columns
+        
+    Returns:
+        Tuple of (X_train, X_val, X_test, y_train, y_val, y_test, encoders)
+    """
+    if train_years is None:
+        train_years = list(range(2017, 2023))  # 2017-2022
+    if feature_cols is None:
+        feature_cols = ['windspeed', 'month', 'hour', 'season_encoded', 'county_encoded']
+    
+    print(f"[Multi-Year Training] Train: {train_years}, Val/Test: {test_year}")
+    
+    # Load training data (multiple years)
+    print("Loading training data...")
+    df_train = load_multi_year_data(years=train_years, counties=counties)
+    
+    # Load test year data
+    print(f"Loading test year data ({test_year})...")
+    df_test_year = load_training_data(year=test_year, counties=counties)
+    
+    # Apply feature engineering to both
+    df_train = apply_feature_engineering(df_train)
+    df_test_year = apply_feature_engineering(df_test_year)
+    
+    # Clean data
+    required = ['aqi', 'windspeed', 'month', 'date']
+    df_train = clean_data(df_train, required)
+    df_test_year = clean_data(df_test_year, required)
+    
+    # Encode categorical features (fit on train, transform both)
+    df_train, encoders = encode_categorical_features(df_train)
+    
+    # Apply same encoding to test year data
+    for col, le in encoders.items():
+        if col in df_test_year.columns:
+            # Handle unseen categories
+            df_test_year[f'{col}_encoded'] = df_test_year[col].astype(str).apply(
+                lambda x: le.transform([x])[0] if x in le.classes_ else -1
+            )
+    
+    # Sort test year by date
+    df_test_year = df_test_year.sort_values('date').reset_index(drop=True)
+    
+    # Split test year into validation (Jan-Jun) and test (Jul-Dec)
+    mid_point = len(df_test_year) // 2
+    df_val = df_test_year.iloc[:mid_point]
+    df_test = df_test_year.iloc[mid_point:]
+    
+    # Get available features
+    available_features = [col for col in feature_cols if col in df_train.columns]
+    
+    # Extract X and y
+    X_train = df_train[available_features]
+    y_train = df_train['aqi']
+    
+    X_val = df_val[available_features]
+    y_val = df_val['aqi']
+    
+    X_test = df_test[available_features]
+    y_test = df_test['aqi']
+    
+    # Report splits
+    print(f"\nMulti-Year Training Split Complete:")
+    print(f"  Train: {len(X_train):,} samples | {train_years[0]}-{train_years[-1]} (all months)")
+    print(f"  Val:   {len(X_val):,} samples | {test_year} (first half)")
+    print(f"  Test:  {len(X_test):,} samples | {test_year} (second half)")
+    
+    return X_train, X_val, X_test, y_train, y_val, y_test, encoders
+
+
+def prepare_classification_data_multiyear(
+    train_years: List[int] = None,
+    test_year: int = 2023,
+    counties: Optional[List[str]] = None,
+    feature_cols: Optional[List[str]] = None
+) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.Series, pd.Series, pd.Series, dict]:
+    """
+    Prepare data for classification using MULTI-YEAR training approach.
+    
+    多年訓練方案（最佳實踐）：
+    - 訓練集：2017-2022 年（6年 × 12月 = 完整季節學習）
+    - 驗證集：2023 年 1-6 月
+    - 測試集：2023 年 7-12 月
+    
+    Args:
+        train_years: Years for training (default: 2017-2022)
+        test_year: Year for validation and testing (default: 2023)
+        counties: Counties to include
+        feature_cols: Feature columns
+        
+    Returns:
+        Tuple of (X_train, X_val, X_test, y_train, y_val, y_test, encoders)
+    """
+    if train_years is None:
+        train_years = list(range(2017, 2023))  # 2017-2022
+    if feature_cols is None:
+        feature_cols = ['windspeed', 'month', 'hour', 'season_encoded', 'county_encoded']
+    
+    print(f"[Multi-Year Training] Train: {train_years}, Val/Test: {test_year}")
+    
+    # Load training data (multiple years)
+    print("Loading training data...")
+    df_train = load_multi_year_data(years=train_years, counties=counties)
+    
+    # Load test year data
+    print(f"Loading test year data ({test_year})...")
+    df_test_year = load_training_data(year=test_year, counties=counties)
+    
+    # Apply feature engineering to both
+    df_train = apply_feature_engineering(df_train)
+    df_test_year = apply_feature_engineering(df_test_year)
+    
+    # Clean data
+    required = ['aqi', 'aqi_level', 'windspeed', 'month', 'date']
+    df_train = clean_data(df_train, required)
+    df_test_year = clean_data(df_test_year, required)
+    
+    # Encode categorical features (fit on train)
+    df_train, encoders = encode_categorical_features(df_train)
+    
+    # Encode target variable
+    le_target = LabelEncoder()
+    df_train['aqi_level_encoded'] = le_target.fit_transform(df_train['aqi_level'])
+    encoders['aqi_level'] = le_target
+    
+    # Apply same encoding to test year data
+    for col, le in encoders.items():
+        if col == 'aqi_level':
+            df_test_year['aqi_level_encoded'] = df_test_year['aqi_level'].apply(
+                lambda x: le.transform([x])[0] if x in le.classes_ else -1
+            )
+        elif col in df_test_year.columns:
+            df_test_year[f'{col}_encoded'] = df_test_year[col].astype(str).apply(
+                lambda x: le.transform([x])[0] if x in le.classes_ else -1
+            )
+    
+    # Sort test year by date
+    df_test_year = df_test_year.sort_values('date').reset_index(drop=True)
+    
+    # Split test year into validation (Jan-Jun) and test (Jul-Dec)
+    mid_point = len(df_test_year) // 2
+    df_val = df_test_year.iloc[:mid_point]
+    df_test = df_test_year.iloc[mid_point:]
+    
+    # Get available features
+    available_features = [col for col in feature_cols if col in df_train.columns]
+    
+    # Extract X and y
+    X_train = df_train[available_features]
+    y_train = df_train['aqi_level_encoded']
+    
+    X_val = df_val[available_features]
+    y_val = df_val['aqi_level_encoded']
+    
+    X_test = df_test[available_features]
+    y_test = df_test['aqi_level_encoded']
+    
+    # Report splits
+    print(f"\nMulti-Year Training Split Complete:")
+    print(f"  Train: {len(X_train):,} samples | {train_years[0]}-{train_years[-1]} (all months)")
+    print(f"  Val:   {len(X_val):,} samples | {test_year} (first half)")
+    print(f"  Test:  {len(X_test):,} samples | {test_year} (second half)")
+    print(f"  Classes: {le_target.classes_}")
     
     return X_train, X_val, X_test, y_train, y_val, y_test, encoders
 
