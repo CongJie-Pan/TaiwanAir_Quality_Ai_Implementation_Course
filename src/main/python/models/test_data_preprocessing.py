@@ -30,6 +30,7 @@ from data_preprocessing import (
     get_lag_feature_names,
     encode_season_onehot,
     check_class_distribution,
+    standardize_features,
 )
 
 
@@ -573,6 +574,94 @@ class TestCheckClassDistribution:
         """Test that missing target column raises ValueError."""
         with pytest.raises(ValueError, match="Column 'nonexistent' not found"):
             check_class_distribution(balanced_df, target_col='nonexistent', verbose=False)
+
+
+# ============================================================================
+# Test: standardize_features() (FR-001-E)
+# ============================================================================
+
+class TestStandardizeFeatures:
+    """Tests for feature standardization function (FR-001-E)."""
+    
+    @pytest.fixture
+    def feature_df(self):
+        """Create DataFrames with different scales for testing."""
+        np.random.seed(42)
+        n = 100
+        return pd.DataFrame({
+            'windspeed': np.random.uniform(0, 15, n),      # 範圍 0-15
+            'month': np.random.randint(1, 13, n),          # 範圍 1-12
+            'pm2.5_lag1': np.random.uniform(0, 200, n),    # 範圍 0-200
+            'hour': np.random.randint(0, 24, n),           # 範圍 0-23
+        })
+    
+    def test_standardize_mean_zero(self, feature_df):
+        """Test that standardized training features have mean ≈ 0."""
+        X_train = feature_df.iloc[:80]
+        X_val = feature_df.iloc[80:]
+        
+        X_train_s, X_val_s, _, scaler = standardize_features(X_train, X_val, None)
+        
+        # 訓練集標準化後均值應接近 0
+        means = X_train_s.mean()
+        for col in X_train_s.columns:
+            assert abs(means[col]) < 0.01, f"Mean of {col} is {means[col]}, should be ~0"
+    
+    def test_standardize_std_one(self, feature_df):
+        """Test that standardized training features have std ≈ 1."""
+        X_train = feature_df.iloc[:80]
+        X_val = feature_df.iloc[80:]
+        
+        X_train_s, X_val_s, _, scaler = standardize_features(X_train, X_val, None)
+        
+        # 訓練集標準化後標準差應接近 1
+        stds = X_train_s.std()
+        for col in X_train_s.columns:
+            assert abs(stds[col] - 1.0) < 0.1, f"Std of {col} is {stds[col]}, should be ~1"
+    
+    def test_scaler_returned(self, feature_df):
+        """Test that a fitted StandardScaler is returned."""
+        X_train = feature_df.iloc[:80]
+        
+        X_train_s, _, _, scaler = standardize_features(X_train)
+        
+        assert scaler is not None
+        assert hasattr(scaler, 'mean_')
+        assert hasattr(scaler, 'scale_')
+    
+    def test_val_test_transformed(self, feature_df):
+        """Test that val/test sets are transformed using train statistics."""
+        X_train = feature_df.iloc[:60]
+        X_val = feature_df.iloc[60:80]
+        X_test = feature_df.iloc[80:]
+        
+        X_train_s, X_val_s, X_test_s, scaler = standardize_features(X_train, X_val, X_test)
+        
+        # 驗證集和測試集也應該被轉換
+        assert X_val_s is not None
+        assert X_test_s is not None
+        assert len(X_val_s) == len(X_val)
+        assert len(X_test_s) == len(X_test)
+    
+    def test_no_modification_original(self, feature_df):
+        """Test that original DataFrames are not modified."""
+        X_train = feature_df.iloc[:80].copy()
+        original_values = X_train['windspeed'].values.copy()
+        
+        X_train_s, _, _, _ = standardize_features(X_train)
+        
+        # 原始資料不應被修改
+        np.testing.assert_array_equal(X_train['windspeed'].values, original_values)
+    
+    def test_exclude_cols(self, feature_df):
+        """Test that excluded columns are not standardized."""
+        X_train = feature_df.iloc[:80].copy()
+        original_month = X_train['month'].values.copy()
+        
+        X_train_s, _, _, _ = standardize_features(X_train, exclude_cols=['month'])
+        
+        # month 欄位應保持原值
+        np.testing.assert_array_equal(X_train_s['month'].values, original_month)
 
 
 # ============================================================================

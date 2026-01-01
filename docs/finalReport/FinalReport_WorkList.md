@@ -137,7 +137,7 @@
     - **結論**: Phase 3/4 必須使用 `class_weight='balanced'` 處理測試集不平衡問題
     - 新增 9 個單元測試 (`TestCheckClassDistribution` 類別)
 
-### [ ] **Task ID**: FR-001-E
+### [x] **Task ID**: FR-001-E
 - **Task Name**: 特徵標準化選項
 - **Work Description**:
     - Why: 線性迴歸係數比較需要特徵有相同尺度（windspeed: 0-15, month: 1-12）
@@ -146,14 +146,22 @@
     - Materials: `sklearn.preprocessing.StandardScaler`
     - Personnel: 潘驄杰
 - **Deliverables**:
-    - [ ] 在線性迴歸模型中加入 standardize 參數
-    - [ ] 標準化後係數與原始係數對照表
+    - [x] 在 `prepare_regression_data_multiyear()` 加入 `standardize` 參數
+    - [x] 新增 `standardize_features()` 函式
+    - [ ] 標準化後係數與原始係數對照表（待 FR-002 實作時產出）
 - **Testing Plan**:
-    - 驗證標準化後特徵均值≈0、標準差≈1
-- **Dependencies**: FR-001, FR-002
+    - 驗證標準化後特徵均值≈0、標準差≈1 ✅ (6 tests passed)
+- **Dependencies**: FR-001
 - **Constraints**: 僅對線性迴歸有影響，決策樹類模型不需要
-- **Completion Status**: 未開始
+- **Completion Status**: ✅ 已完成 (2026/01/01)
 - **Priority**: P3
+- **Complete Summary**:
+    - 新增 `standardize_features()` 函式於 `data_preprocessing.py`
+    - 使用 `sklearn.preprocessing.StandardScaler` 標準化數值特徵
+    - Scaler 只在訓練集上 fit，驗證/測試集只做 transform（避免資料洩漏）
+    - 修改 `prepare_regression_data_multiyear()` 新增 `standardize: bool = False` 參數
+    - 回傳 8 元素 tuple，新增 `scaler` 物件供後續使用
+    - 新增 6 個單元測試 (`TestStandardizeFeatures` 類別)
 
 ---
 

@@ -20,7 +20,7 @@ import pandas as pd
 import numpy as np
 from typing import Tuple, Optional, List, Dict, Any
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import LabelEncoder, StandardScaler
 import sys
 from pathlib import Path
 
@@ -780,6 +780,82 @@ def encode_categorical_features(
     return df, encoders
 
 
+# ============================================================================
+# Feature Standardization (FR-001-E: 讓線性迴歸係數可比較)
+# ============================================================================
+
+def standardize_features(
+    X_train: pd.DataFrame,
+    X_val: pd.DataFrame = None,
+    X_test: pd.DataFrame = None,
+    exclude_cols: List[str] = None
+) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, StandardScaler]:
+    """
+    Standardize numerical features using StandardScaler.
+    
+    將特徵轉換為平均值=0、標準差=1 的尺度，讓線性迴歸係數可直接比較重要性。
+    
+    ⚠️ 重要：
+    - Scaler 只在訓練集上 fit，對驗證/測試集只做 transform
+    - 這避免了資料洩漏（不使用未來資料的統計資訊）
+    
+    Args:
+        X_train: Training features DataFrame
+        X_val: Validation features DataFrame (optional)
+        X_test: Test features DataFrame (optional)
+        exclude_cols: Columns to exclude from standardization (e.g., one-hot encoded)
+        
+    Returns:
+        Tuple of (X_train_scaled, X_val_scaled, X_test_scaled, scaler)
+        - X_val_scaled and X_test_scaled will be None if inputs are None
+        - scaler: Fitted StandardScaler object (可用於後續反標準化)
+        
+    Example:
+        >>> X_train_s, X_val_s, X_test_s, scaler = standardize_features(X_train, X_val, X_test)
+        >>> # 標準化後的係數可直接比較重要性
+        >>> model.fit(X_train_s, y_train)
+        >>> print("Feature importances (standardized coefficients):", model.coef_)
+    """
+    if exclude_cols is None:
+        exclude_cols = []
+    
+    # 識別需要標準化的數值欄位
+    numeric_cols = X_train.select_dtypes(include=[np.number]).columns.tolist()
+    cols_to_scale = [col for col in numeric_cols if col not in exclude_cols]
+    
+    if not cols_to_scale:
+        print("Warning: No columns to standardize.")
+        return X_train, X_val, X_test, None
+    
+    print(f"Standardizing {len(cols_to_scale)} features: {cols_to_scale}")
+    
+    # 建立並擬合 scaler（只用訓練資料）
+    scaler = StandardScaler()
+    
+    # 複製資料以避免修改原始 DataFrame
+    X_train_scaled = X_train.copy()
+    X_train_scaled[cols_to_scale] = scaler.fit_transform(X_train[cols_to_scale])
+    
+    # 轉換驗證集（如有提供）
+    X_val_scaled = None
+    if X_val is not None:
+        X_val_scaled = X_val.copy()
+        X_val_scaled[cols_to_scale] = scaler.transform(X_val[cols_to_scale])
+    
+    # 轉換測試集（如有提供）
+    X_test_scaled = None
+    if X_test is not None:
+        X_test_scaled = X_test.copy()
+        X_test_scaled[cols_to_scale] = scaler.transform(X_test[cols_to_scale])
+    
+    # 驗證標準化結果
+    train_means = X_train_scaled[cols_to_scale].mean()
+    train_stds = X_train_scaled[cols_to_scale].std()
+    print(f"  Train set - Mean range: [{train_means.min():.4f}, {train_means.max():.4f}] (should be ~0)")
+    print(f"  Train set - Std range:  [{train_stds.min():.4f}, {train_stds.max():.4f}] (should be ~1)")
+    
+    return X_train_scaled, X_val_scaled, X_test_scaled, scaler
+
 def split_data_temporal(
     df: pd.DataFrame,
     target_col: str,
@@ -1003,8 +1079,9 @@ def prepare_regression_data_multiyear(
     train_years: List[int] = None,
     test_year: int = 2023,
     counties: Optional[List[str]] = None,
-    feature_cols: Optional[List[str]] = None
-) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.Series, pd.Series, pd.Series, dict]:
+    feature_cols: Optional[List[str]] = None,
+    standardize: bool = False
+) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.Series, pd.Series, pd.Series, dict, Optional[StandardScaler]]:
     """
     Prepare data for regression using MULTI-YEAR training approach.
     
@@ -1023,9 +1100,12 @@ def prepare_regression_data_multiyear(
         test_year: Year for validation and testing (default: 2023)
         counties: Counties to include
         feature_cols: Feature columns
+        standardize: Whether to standardize features (default: False)
+                     設為 True 可讓線性迴歸係數直接比較重要性
         
     Returns:
-        Tuple of (X_train, X_val, X_test, y_train, y_val, y_test, encoders)
+        Tuple of (X_train, X_val, X_test, y_train, y_val, y_test, encoders, scaler)
+        - scaler: StandardScaler object if standardize=True, else None
     """
     if train_years is None:
         train_years = list(range(2017, 2023))  # 2017-2022
@@ -1093,13 +1173,21 @@ def prepare_regression_data_multiyear(
     X_test = df_test[available_features]
     y_test = df_test['aqi']
     
+    # Apply standardization if requested (FR-001-E)
+    scaler = None
+    if standardize:
+        print("\n[Standardization] Applying StandardScaler for coefficient comparison...")
+        X_train, X_val, X_test, scaler = standardize_features(X_train, X_val, X_test)
+    
     # Report splits
     print(f"\nMulti-Year Training Split Complete:")
     print(f"  Train: {len(X_train):,} samples | {train_years[0]}-{train_years[-1]} (all months)")
     print(f"  Val:   {len(X_val):,} samples | {test_year} (first half)")
     print(f"  Test:  {len(X_test):,} samples | {test_year} (second half)")
+    if standardize:
+        print(f"  Standardization: ✅ Enabled (coefficients can be compared directly)")
     
-    return X_train, X_val, X_test, y_train, y_val, y_test, encoders
+    return X_train, X_val, X_test, y_train, y_val, y_test, encoders, scaler
 
 
 def prepare_classification_data_multiyear(
