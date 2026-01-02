@@ -1,0 +1,61 @@
+{
+  "timestamp": "20260102_123454",
+  "features_used": [
+    "pm2.5_lag1",
+    "pm10_lag1",
+    "o3_lag1",
+    "pm2.5_lag24",
+    "pm10_lag24",
+    "o3_lag24",
+    "windspeed",
+    "hour_sin",
+    "hour_cos",
+    "month_sin",
+    "month_cos",
+    "season_spring",
+    "season_summer",
+    "season_autumn",
+    "season_winter",
+    "county_encoded"
+  ],
+  "hyperparameters": {
+    "n_estimators": 100,
+    "max_depth": 10,
+    "class_weight": "balanced"
+  },
+  "training": {
+    "accuracy": 0.7961487650698459,
+    "f1_macro": 0.7641628225941597,
+    "samples": 1492716,
+    "oob_score": 0.793567564091227
+  },
+  "validation": {
+    "accuracy": 0.7794360660300231,
+    "f1_macro": 0.7394336219531096,
+    "samples": 114978
+  },
+  "test": {
+    "accuracy": 0.8470068447281678,
+    "precision_macro": 0.6671116166066767,
+    "recall_macro": 0.7461930510221126,
+    "f1_macro": 0.6922058415916199,
+    "n_samples": 114979,
+    "confusion_matrix": [
+      [
+        1855,
+        1070,
+        45
+      ],
+      [
+        3516,
+        22384,
+        6077
+      ],
+      [
+        121,
+        6762,
+        73149
+      ]
+    ]
+  }
+}
