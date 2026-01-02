@@ -1,0 +1,41 @@
+{
+  "timestamp": "20260102_113837",
+  "features_used": [
+    "pm2.5_lag1",
+    "pm10_lag1",
+    "o3_lag1",
+    "pm2.5_lag24",
+    "pm10_lag24",
+    "o3_lag24",
+    "windspeed",
+    "hour_sin",
+    "hour_cos",
+    "month_sin",
+    "month_cos",
+    "season_spring",
+    "season_summer",
+    "season_autumn",
+    "season_winter",
+    "county_new_taipei",
+    "county_changhua",
+    "county_kaohsiung"
+  ],
+  "training": {
+    "r2": 0.7595744486931039,
+    "rmse": 15.851329364511514,
+    "mae": 11.33317426721519,
+    "samples": 1492716
+  },
+  "validation": {
+    "r2": 0.7162436546475924,
+    "rmse": 14.461385798998393,
+    "mae": 10.658808586715454,
+    "samples": 114978
+  },
+  "test": {
+    "r2": 0.7012170371095146,
+    "rmse": 12.488798257833018,
+    "mae": 9.060544598769178,
+    "n_samples": 114979
+  }
+}

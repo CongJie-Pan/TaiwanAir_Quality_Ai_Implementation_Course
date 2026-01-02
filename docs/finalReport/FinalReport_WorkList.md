@@ -274,7 +274,7 @@
 
 ## Phase 2: 線性回歸模型實作
 
-### [ ] **Task ID**: FR-002
+### [x] **Task ID**: FR-002
 - **Task Name**: 線性回歸模型開發
 - **Work Description**:
     - Why: 量化風速、季節等因素對 AQI 的影響，驗證期中「AQI 隨風速增加而下降」的發現
@@ -286,18 +286,57 @@
         - `docs/finalReport/spec/02-models.md` (2.2 節)
         - `CourseCode/ai_statistic_model/AIp09/AIp09時序與回歸A.py`
 - **Deliverables**:
-    - [ ] `src/main/python/models/linear_regression.py` 模型類別
-    - [ ] 訓練與預測函式
-    - [ ] 係數表輸出（含 β 值解釋）
-    - [ ] 評估指標：R², RMSE, MAE
+    - [x] `src/main/python/models/linear_regression.py` 模型類別
+    - [x] 訓練與預測函式
+    - [x] 係數表輸出（含 β 值解釋）
+    - [x] 評估指標：R², RMSE, MAE
+    - [x] `src/main/python/models/run_linear_regression.py` 執行腳本
+    - [x] `src/main/python/models/test_linear_regression.py` 單元測試
 - **Testing Plan**:
-    - Unit Test: 驗證模型可正常訓練與預測
-    - 評估驗證: R² > 0.5 表示模型有效
+    - Unit Test: 驗證模型可正常訓練與預測 ✅ (20 passed)
+    - 評估驗證: R² = 0.70 > 0.5 ✅ 模型有效
 - **Dependencies**: FR-001 (數據準備)
 - **Constraints**: 需確保係數可解釋（β₁ 對應風速影響量）
 - **Class Imbalance**: 不適用（回歸任務預測連續數值 AQI，無類別概念）
-- **Completion Status**: 未開始
+- **Completion Status**: ✅ 已完成 (2026/01/02)
 - **Notes**: 課程來源 AIp09，重點產出為係數表與預測 vs 實際散點圖
+- **Complete Summary**:
+    - 建立 `AQILinearRegression` 類別，實作 `train()`, `predict()`, `evaluate()`, `get_coefficients()` 方法
+    - 使用封閉形式解 (OLS)，CPU 訓練，不使用 GPU
+    - 對所有數值特徵進行 StandardScaler 標準化，使係數可直接比較重要性
+    - **模型效能**：Train R² = 0.76, Val R² = 0.72, Test R² = 0.70
+    - **重要發現**：pm2.5_lag24 (+11.98) 與 pm2.5_lag1 (+10.18) 為最重要預測因子
+    - **意外發現**：windspeed 係數為正 (+0.72)，與期中假設相反（可能因共線性效應）
+    - 執行結果存於 `results/linear_regression/YYYYMMDD_HHMMSS/`（時間戳資料夾）
+    - 產出 5 張圖表：scatter_plot, coefficients_bar, residuals_hist, residuals_scatter, feature_importance_pie
+
+### [x] **Task ID**: FR-002-R
+- **Task Name**: 線性回歸模型報告撰寫
+- **Work Description**:
+    - Why: 以文字解釋模型結果的意義，符合課程「至少 2-4 個模型解讀」的要求
+    - How: 閱讀執行結果，撰寫繁體中文報告，以段落文字為主、列點為輔
+- **Resources Required**:
+    - Materials: `results/linear_regression/YYYYMMDD_HHMMSS/` 內所有產出檔案
+    - Personnel: 潘驄杰
+- **Deliverables**:
+    - [x] `docs/finalReport/模型執行報告/線性回歸模型報告.md`
+- **Report Requirements** (報告撰寫規範):
+    - 說明 code 執行方式
+    - 說明線性回歸計算與訓練方式（OLS、封閉形式解、StandardScaler）
+    - 每張圖表需包含：
+        - **📖 如何閱讀此圖**：橫軸、縱軸、顏色、線條的含義
+        - **🔍 圖表特徵與發現**：4-5 個具體的觀察點與洞察
+    - 以繁體中文書寫，段落文字為主，列點為輔
+    - 實際附加圖表予以說明（使用相對路徑嵌入）
+- **Testing Plan**:
+    - 文件審閱: 確認圖表路徑正確顯示
+- **Dependencies**: FR-002 (模型開發)
+- **Completion Status**: ✅ 已完成 (2026/01/02)
+- **Complete Summary**:
+    - 報告共 7 大章節：執行方式、計算方式、評估結果、係數分析、預測分析、發現討論、結論
+    - 詳細解釋 5 張圖表（係數條形圖、特徵重要性圓餅圖、散點圖、殘差直方圖、殘差散點圖）
+    - 每張圖含「如何閱讀」與「圖表特徵與發現」兩部分
+    - 報告路徑：`docs/finalReport/模型執行報告/線性回歸模型報告.md`
 
 ---
 
@@ -328,6 +367,34 @@
 - **Completion Status**: 未開始
 - **Notes**: 課程來源 AIp10，決策樹圖為期末報告亮點
 
+### [] **Task ID**: FR-003-R
+- **Task Name**: 決策樹模型報告撰寫
+- **Work Description**:
+    - Why: 以文字解釋模型結果的意義，符合課程「至少 2-4 個模型解讀」的要求
+    - How: 閱讀執行結果，撰寫繁體中文報告，以段落文字為主、列點為輔
+- **Resources Required**:
+    - Materials: `results/decision_tree/YYYYMMDD_HHMMSS/` 內所有產出檔案
+    - Personnel: 潘驄杰
+- **Deliverables**:
+    - [] `docs/finalReport/模型執行報告/決策樹模型報告.md`
+- **Report Requirements** (報告撰寫規範):
+    - 說明 code 執行方式
+    - 說明決策樹計算與訓練方式
+    - 每張圖表需包含：
+        - **📖 如何閱讀此圖**：橫軸、縱軸、顏色、線條的含義
+        - **🔍 圖表特徵與發現**：4-5 個具體的觀察點與洞察
+    - 以繁體中文書寫，段落文字為主，列點為輔
+    - 實際附加圖表予以說明（使用相對路徑嵌入）
+- **Testing Plan**:
+    - 文件審閱: 確認圖表路徑正確顯示
+- **Dependencies**: FR-003 (模型開發)
+- **Completion Status**: 
+- **Complete Summary**:
+    - 報告共 7 大章節：執行方式、計算方式、評估結果、係數分析、預測分析、發現討論、結論
+    - 詳細解釋圖表
+    - 每張圖含「如何閱讀」與「圖表特徵與發現」兩部分
+    - 報告路徑：`docs/finalReport/模型執行報告/決策樹模型報告.md`
+
 ---
 
 ## Phase 4: 隨機森林模型實作
@@ -356,6 +423,34 @@
 - **Class Imbalance**: 使用 `class_weight='balanced'` 處理類別不平衡（依 FR-001-D 觀察結果決定）
 - **Completion Status**: 未開始
 - **Notes**: 課程來源 AIp10，特徵重要性用於驗證期中觀察
+
+### [ ] **Task ID**: FR-004-R
+- **Task Name**: 隨機森林模型報告撰寫
+- **Work Description**:
+    - Why: 以文字解釋模型結果的意義，符合課程「至少 2-4 個模型解讀」的要求
+    - How: 閱讀執行結果，撰寫繁體中文報告，以段落文字為主、列點為輔
+- **Resources Required**:
+    - Materials: `results/random_forest/YYYYMMDD_HHMMSS/` 內所有產出檔案
+    - Personnel: 潘驄杰
+- **Deliverables**:
+    - [] `docs/finalReport/模型執行報告/隨機森林模型報告.md`
+- **Report Requirements** (報告撰寫規範):
+    - 說明 code 執行方式
+    - 說明隨機森林計算與訓練方式
+    - 每張圖表需包含：
+        - **📖 如何閱讀此圖**：橫軸、縱軸、顏色、線條的含義
+        - **🔍 圖表特徵與發現**：4-5 個具體的觀察點與洞察
+    - 以繁體中文書寫，段落文字為主，列點為輔
+    - 實際附加圖表予以說明（使用相對路徑嵌入）
+- **Testing Plan**:
+    - 文件審閱: 確認圖表路徑正確顯示
+- **Dependencies**: FR-003 (模型開發)
+- **Completion Status**: 
+- **Complete Summary**:
+    - 報告共 7 大章節：執行方式、計算方式、評估結果、係數分析、預測分析、發現討論、結論
+    - 詳細解釋圖表
+    - 每張圖含「如何閱讀」與「圖表特徵與發現」兩部分
+    - 報告路徑：`docs/finalReport/模型執行報告/隨機森林模型報告.md`
 
 ---
 
@@ -430,9 +525,11 @@
 
 | Task ID | 任務名稱 | 負責人 | 狀態 |
 |---------|----------|--------|------|
-| FR-001 | 數據準備 | - | [ ] 未開始 |
-| FR-002 | 線性回歸 | - | [ ] 未開始 |
+| FR-001 | 數據準備 | 潘驄杰 | [x] ✅ 已完成 |
+| FR-002 | 線性回歸 | 潘驄杰 | [x] ✅ 已完成 |
+| FR-002-R | 線性回歸報告 | 潘驄杰 | [x] ✅ 已完成 |
 | FR-003 | 決策樹 | - | [ ] 未開始 |
 | FR-004 | 隨機森林 | - | [ ] 未開始 |
 | FR-005 | Streamlit 整合 | - | [ ] 未開始 |
 | FR-006 | 報告撰寫 | - | [ ] 未開始 |
+

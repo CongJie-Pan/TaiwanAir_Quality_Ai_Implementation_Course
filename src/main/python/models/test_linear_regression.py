@@ -10,9 +10,14 @@ import pytest
 import numpy as np
 import pandas as pd
 import tempfile
+import sys
 from pathlib import Path
 
-from linear_regression import AQILinearRegression, create_scatter_plot, save_metrics_json
+# Add project root for imports
+PROJECT_ROOT = Path(__file__).parent.parent.parent.parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+
+from src.main.python.models.linear_regression import AQILinearRegression, create_scatter_plot, save_metrics_json
 
 
 # ============================================================================
