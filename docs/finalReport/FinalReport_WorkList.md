@@ -342,7 +342,7 @@
 
 ## Phase 3: 決策樹模型實作
 
-### [ ] **Task ID**: FR-003
+### [x] **Task ID**: FR-003
 - **Task Name**: 決策樹分類模型開發
 - **Work Description**:
     - Why: 自動學習 AQI 等級分類規則，產生可視化決策樹圖對應期中的交叉表發現
@@ -354,45 +354,55 @@
         - `docs/finalReport/spec/02-models.md` (2.3 節)
         - `CourseCode/ai_statistic_model/AIp10/AIp10決策與分類A.py`
 - **Deliverables**:
-    - [ ] `src/main/python/models/decision_tree.py` 模型類別
-    - [ ] 決策樹可視化圖（可放入 PPT）
-    - [ ] 混淆矩陣 (Confusion Matrix)
-    - [ ] 特徵重要性排名
+    - [x] `src/main/python/models/decision_tree.py` 模型類別
+    - [x] 決策樹可視化圖（可放入 PPT）
+    - [x] 混淆矩陣 (Confusion Matrix)
+    - [x] 特徵重要性排名
 - **Testing Plan**:
-    - Unit Test: 驗證分類預測輸出正確類別
-    - 評估驗證: Accuracy > 75%
+    - Unit Test: 驗證分類預測輸出正確類別 ✅ (35 passed)
+    - 評估驗證: Accuracy > 75% ✅ (Test Accuracy = 82.11%)
 - **Dependencies**: FR-001 (數據準備)
 - **Constraints**: max_depth=5 限制深度，確保規則樹圖清晰可讀
 - **Class Imbalance**: 使用 `class_weight='balanced'` 處理類別不平衡（依 FR-001-D 觀察結果決定）
-- **Completion Status**: 未開始
+- **Completion Status**: ✅ 已完成 (2026/01/02)
 - **Notes**: 課程來源 AIp10，決策樹圖為期末報告亮點
+- **Complete Summary**:
+    - 建立 `AQIDecisionTree` 類別，實作 `train()`, `predict()`, `evaluate()`, `get_feature_importance()`, `get_tree_rules()` 方法
+    - 使用 Gini 不純度，max_depth=5，class_weight='balanced'
+    - **模型效能**：Train Accuracy = 77.01%, Val Accuracy = 76.15%, Test Accuracy = **82.11%** ✅
+    - **重要發現**：pm2.5_lag24 (79.3%) 與 pm2.5_lag1 (16.6%) 為最重要特徵，合計佔 95.9%
+    - 決策樹第一分割點：pm2.5_lag24 ≤ 16.94 → 良好
+    - 執行結果存於 `results/decision_tree/20260102_121220/`
+    - 產出 7 個檔案：confusion_matrix.png, decision_tree.png, feature_importance.png/csv, metrics.json, tree_rules.txt, model.joblib
+    - 單元測試：35 個測試案例全數通過 (pytest)
 
-### [] **Task ID**: FR-003-R
+### [x] **Task ID**: FR-003-R
 - **Task Name**: 決策樹模型報告撰寫
 - **Work Description**:
     - Why: 以文字解釋模型結果的意義，符合課程「至少 2-4 個模型解讀」的要求
     - How: 閱讀執行結果，撰寫繁體中文報告，以段落文字為主、列點為輔
 - **Resources Required**:
-    - Materials: `results/decision_tree/YYYYMMDD_HHMMSS/` 內所有產出檔案
+    - Materials: `results/decision_tree/20260102_121220/` 內所有產出檔案
     - Personnel: 潘驄杰
 - **Deliverables**:
-    - [] `docs/finalReport/模型執行報告/決策樹模型報告.md`
+    - [x] `docs/finalReport/模型執行報告/決策樹模型報告.md`
 - **Report Requirements** (報告撰寫規範):
-    - 說明 code 執行方式
-    - 說明決策樹計算與訓練方式
+    - 說明 code 執行方式 ✅
+    - 說明決策樹計算與訓練方式 ✅
     - 每張圖表需包含：
-        - **📖 如何閱讀此圖**：橫軸、縱軸、顏色、線條的含義
-        - **🔍 圖表特徵與發現**：4-5 個具體的觀察點與洞察
-    - 以繁體中文書寫，段落文字為主，列點為輔
-    - 實際附加圖表予以說明（使用相對路徑嵌入）
+        - **📖 如何閱讀此圖**：橫軸、縱軸、顏色、線條的含義 ✅
+        - **🔍 圖表特徵與發現**：4-5 個具體的觀察點與洞察 ✅
+    - 以繁體中文書寫，段落文字為主，列點為輔 ✅
+    - 實際附加圖表予以說明（使用相對路徑嵌入）✅
 - **Testing Plan**:
-    - 文件審閱: 確認圖表路徑正確顯示
+    - 文件審閱: 確認圖表路徑正確顯示 ✅
 - **Dependencies**: FR-003 (模型開發)
-- **Completion Status**: 
+- **Completion Status**: ✅ 已完成 (2026/01/02)
 - **Complete Summary**:
-    - 報告共 7 大章節：執行方式、計算方式、評估結果、係數分析、預測分析、發現討論、結論
-    - 詳細解釋圖表
+    - 報告共 9 大章節：執行方式、計算方式、評估結果、混淆矩陣分析、決策樹視覺化、特徵重要性分析、決策規則解讀、發現討論、結論
+    - 詳細解釋 3 張圖表（混淆矩陣、決策樹、特徵重要性）
     - 每張圖含「如何閱讀」與「圖表特徵與發現」兩部分
+    - **核心發現**：pm2.5_lag24 貢獻 79.3% 分類預測力，模型自動學習到與官方 AQI 標準吻合的 PM2.5 閾值
     - 報告路徑：`docs/finalReport/模型執行報告/決策樹模型報告.md`
 
 ---
@@ -528,7 +538,8 @@
 | FR-001 | 數據準備 | 潘驄杰 | [x] ✅ 已完成 |
 | FR-002 | 線性回歸 | 潘驄杰 | [x] ✅ 已完成 |
 | FR-002-R | 線性回歸報告 | 潘驄杰 | [x] ✅ 已完成 |
-| FR-003 | 決策樹 | - | [ ] 未開始 |
+| FR-003 | 決策樹 | 潘驄杰 | [x] ✅ 已完成 |
+| FR-003-R | 決策樹報告 | 潘驄杰 | [x] ✅ 已完成 |
 | FR-004 | 隨機森林 | - | [ ] 未開始 |
 | FR-005 | Streamlit 整合 | - | [ ] 未開始 |
 | FR-006 | 報告撰寫 | - | [ ] 未開始 |

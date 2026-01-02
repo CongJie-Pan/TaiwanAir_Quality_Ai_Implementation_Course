@@ -1,0 +1,17 @@
+﻿feature,importance,rank
+pm2.5_lag24,0.793175321748211,1
+pm2.5_lag1,0.16553768368111071,2
+o3_lag24,0.029588948846323793,3
+season_summer,0.005435228712482255,4
+hour_cos,0.003286475384141961,5
+windspeed,0.002664208477549585,6
+pm10_lag1,0.0003121331501806902,7
+o3_lag1,0.0,8
+hour_sin,0.0,9
+pm10_lag24,0.0,10
+month_cos,0.0,11
+month_sin,0.0,12
+season_spring,0.0,13
+season_autumn,0.0,14
+season_winter,0.0,15
+county_encoded,0.0,16
